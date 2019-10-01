@@ -3,6 +3,7 @@ from subprocess import run, PIPE
 from re import match, search
 from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
 from socket import gaierror, timeout
+import validate
 
 
 def getUsers(host):
@@ -17,7 +18,8 @@ def getUsers(host):
         encoding='ascii', stdout=PIPE
         ).stdout.strip('\n').split('\n')
     for line in file_contents:
-        if not match(no_shell, line.split(':')[6]):
+        if (not match(no_shell, line.split(':')[6]) and
+            validate.ValidateUN(line.split(':')[0])):
             user_list.append(line.split(':')[0])
     return user_list
 
@@ -62,7 +64,7 @@ def getHosts(ossec_server):
          '-ls'], encoding='ascii', stdout=PIPE).stdout.split('\n')
     hostnames = []
     for host in hosts:
-        if len(host) > 0:
+        if len(host) > 0 and validate.ValidateHN(host.split(',')[1]):
             hostnames.append(host.split(',')[1])
     for hostname in hostnames[1:5]:
         try:
@@ -97,7 +99,8 @@ def getADUsers(ossec_server):
          ).stdout.strip('\n').split('\n')
     # Parsing through the file, returning a list of users.
     for user in ad_users:
-        ad_user_list.append(user.split(':')[0])
+        if validate.ValidateUN(user.split(':')[0]):
+            ad_user_list.append(user.split(':')[0])
     return ad_user_list
 
 

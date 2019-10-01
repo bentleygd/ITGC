@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from socket import gethostbyname
 from smtplib import SMTP
 from email.mime.text import MIMEText
 

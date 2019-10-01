@@ -2,7 +2,6 @@
 from csv import DictWriter
 # from coreutils import mailSend
 import itgcbin
-import validate
 
 
 def main():
@@ -24,7 +23,7 @@ def main():
     for host in host_list:
         users = itgcbin.getUsers(host)
         admin_groups = itgcbin.getGroups(host)
-        orphans = getOrphans(users, ad_users)
+        orphans = itgcbin.getOrphans(users, ad_users)
         # Placeholder
 
 
