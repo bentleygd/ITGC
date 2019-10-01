@@ -34,7 +34,7 @@ def getGroups(host):
         ['/usr/bin/ssh', host, 'cat', '/etc/group'],
         encoding='ascii', stdout=PIPE
         ).stdout.strip('\n').split('\n')
-    groups = [ line.strip('\n') for line in m_groups]
+    groups = [line.strip('\n') for line in m_groups]
     for group in groups:
         r_exp = r'^' + str(group) + r'.+\d{4,6}:'
         for host_group in host_groups:
@@ -45,6 +45,7 @@ def getGroups(host):
                 m_group_list.append(host_group)
     # Returning monitored groups and their members as a list of
     # dictionaries.
+    m_groups.close()
     for m_group in m_group_list:
         monitored_groups.append(
             {m_group.split(':')[0]: m_group.split(':')[3]}
@@ -100,7 +101,7 @@ def getADUsers(ossec_server):
     return ad_user_list
 
 
-def getTermdUsers(local_users, ad_users):
+def getOrphans(local_users, ad_users):
     """Compares user lists, returns list of users not in AD."""
     t_users = []
     # Getting excluded users.
