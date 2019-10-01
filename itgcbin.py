@@ -25,20 +25,30 @@ def getUsers(host):
 def getGroups(host):
     """Connect to host, get monitored groups, return groups."""
     groups = []
+    m_group_list = []
     monitored_groups = []
+    # Obtaining groups to monitor.
     m_groups = open('monitored_groups.list', mode='r', encoding='ascii')
-    # Obtaining groups (and members) that will be monitored.
+    # Obtaining members of monitored groups from a remote host.
     host_groups = run(
         ['/usr/bin/ssh', host, 'cat', '/etc/group'],
         encoding='ascii', stdout=PIPE
         ).stdout.strip('\n').split('\n')
-    for line in m_groups:
-        groups.append(line.strip('\n'))
+    groups = [ line.strip('\n') for line in m_groups]
     for group in groups:
         r_exp = r'^' + str(group) + r'.+\d{4,6}:'
         for host_group in host_groups:
-            if search(r_exp, host_group):
-                monitored_groups.append(host_group)
+            if (search(r_exp, host_group) and
+                host_group.split(':')[3] is not None and
+                len(host_group.split(':')[3]) > 0):
+                # If all are true, append.
+                m_group_list.append(host_group)
+    # Returning monitored groups and their members as a list of
+    # dictionaries.
+    for m_group in m_group_list:
+        monitored_groups.append(
+            {m_group.split(':')[0]: m_group.split(':')[3]}
+        )
     return monitored_groups
 
 
