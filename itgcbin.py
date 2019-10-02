@@ -3,7 +3,7 @@ from subprocess import run, PIPE
 from re import match, search
 from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
 from socket import gaierror, timeout
-import validate
+from validate import ValidateUN, ValidateHN
 
 
 def getUsers(host):
@@ -18,8 +18,9 @@ def getUsers(host):
         encoding='ascii', stdout=PIPE
         ).stdout.strip('\n').split('\n')
     for line in file_contents:
-        if (not match(no_shell, line.split(':')[6]) and
-            validate.ValidateUN(line.split(':')[0])):
+        shell = line.split(':')[6]
+        username = line.split(':')[0]
+        if not match(no_shell, shell) and ValidateUN(username):
             user_list.append(line.split(':')[0])
     return user_list
 
@@ -50,7 +51,7 @@ def getGroups(host):
     m_groups.close()
     for m_group in m_group_list:
         monitored_groups.append(
-            {m_group.split(':')[0]: m_group.split(':')[3]}
+            {m_group.split(':')[0]: m_group.split(':')[3].split(',')}
         )
     return monitored_groups
 
@@ -64,7 +65,7 @@ def getHosts(ossec_server):
          '-ls'], encoding='ascii', stdout=PIPE).stdout.split('\n')
     hostnames = []
     for host in hosts:
-        if len(host) > 0 and validate.ValidateHN(host.split(',')[1]):
+        if len(host) > 0 and ValidateHN(host.split(',')[1]):
             hostnames.append(host.split(',')[1])
     for hostname in hostnames[1:5]:
         try:
@@ -99,8 +100,9 @@ def getADUsers(ossec_server):
          ).stdout.strip('\n').split('\n')
     # Parsing through the file, returning a list of users.
     for user in ad_users:
-        if validate.ValidateUN(user.split(':')[0]):
-            ad_user_list.append(user.split(':')[0])
+        username = user.split(':')[0]
+        if ValidateUN(username):
+            ad_user_list.append(username)
     return ad_user_list
 
 
@@ -116,3 +118,23 @@ def getOrphans(local_users, ad_users):
         if user not in ad_users and user not in sys_accts:
             t_users.append(user)
     return t_users
+
+
+def getAdminEx(kg_admin_fn, admin_list):
+    """Compares admin lists, returns list of exceptions."""
+    admin_ex = []
+    # audit_findinddg = []
+    kg_admin_file = open(kg_admin_fn, 'r', encoding='ascii')
+    kg_admins = [kg_admin.strip('\n') for kg_admin in kg_admin_file]
+    kg_admin_file.close()
+    for kg_admin in kg_admins:
+        for admins in admin_list:
+            tested_group = kg_admin.split(':')[0]
+            if tested_group in admins:
+                audit_finding = {tested_group: []}
+                known_admins = kg_admin.split(':')[1]
+                for admin in admins.get(tested_group):
+                    if admin not in known_admins:
+                            audit_finding[tested_group].append(admin)
+                admin_ex.append(audit_finding)
+    return admin_ex

@@ -11,20 +11,24 @@ def main():
     fields = ['host_name', 'admin_exceptions', 'orphans']
     results = DictWriter(results_file, fieldnames=fields)
     results.writeheader()
-
     # Getting audit info.
     ossec_server = open('ossec.cnf', 'r', encoding='ascii').read().strip('\n')
-    admins_file = open('known_admins.list', 'r', encoding='ascii')
-    kg_admins = [admins.strip('\n') for admins in admins_file]
-    admin_exc = []
-    # Running the info.
     host_list = itgcbin.getHosts(ossec_server)
     ad_users = itgcbin.getADUsers(ossec_server)
-    for host in host_list:
+    alive_int = len(host_list.get('active_hosts'))
+    dead_int = len(host_list.get('dead_hosts'))
+    total_int = alive_int + dead_int
+    # Running the audit.
+    for host in host_list.get('active_hosts'):
         users = itgcbin.getUsers(host)
         admin_groups = itgcbin.getGroups(host)
-        orphans = itgcbin.getOrphans(users, ad_users)
-        # Placeholder
+        orphans = str(itgcbin.getOrphans(users, ad_users))
+        bad_admins = itgcbin.getAdminEx('known_admins.list', admin_groups)
+        results.writerow(
+            {'host_name':host, 'admin_exceptions': bad_admins,
+             'orphans': orphans}
+        )
+    results_file.close()
 
 
 if __name__ == '__main__':
