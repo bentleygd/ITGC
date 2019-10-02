@@ -135,6 +135,6 @@ def getAdminEx(kg_admin_fn, admin_list):
                 known_admins = kg_admin.split(':')[1]
                 for admin in admins.get(tested_group):
                     if admin not in known_admins:
-                            audit_finding[tested_group].append(admin)
+                        audit_finding[tested_group].append(admin)
                 admin_ex.append(audit_finding)
     return admin_ex
