@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from csv import DictWriter
+from csv import DictWriter, DictReader
 # from coreutils import mailSend
 import itgcbin
 
@@ -25,10 +25,15 @@ def main():
         orphans = str(itgcbin.getOrphans(users, ad_users))
         bad_admins = itgcbin.getAdminEx('known_admins.list', admin_groups)
         results.writerow(
-            {'host_name':host, 'admin_exceptions': bad_admins,
+            {'host_name': host, 'admin_exceptions': bad_admins,
              'orphans': orphans}
         )
     results_file.close()
+    results_read = DictReader(results_file)
+    msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
+        alive_int, total_int
+    )
+#    msg_body = msg_body
 
 
 if __name__ == '__main__':
