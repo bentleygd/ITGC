@@ -1,16 +1,21 @@
 #!/usr/bin/python3
 from csv import DictWriter, DictReader
-# from coreutils import mailSend
+from coreutils import mailSend, getConfig
 import itgcbin
 
 
 def main():
     """Doing the thing."""
     # Setting up the results file.
-    results_file = open('audit_results.csv', 'w')
+    results_write = open('audit_results.csv', 'w')
     fields = ['host_name', 'admin_exceptions', 'orphans']
-    results = DictWriter(results_file, fieldnames=fields)
+    results = DictWriter(results_write, fieldnames=fields)
     results.writeheader()
+    # Setting mail configuration.
+    config = getConfig('config.cnf')
+    sender = config.GetMailSender()
+    recipient = config.GetReportRcpts()
+    smtp_server = config.GetSMTPServer()
     # Getting audit info.
     ossec_server = open('ossec.cnf', 'r', encoding='ascii').read().strip('\n')
     host_list = itgcbin.getHosts(ossec_server)
@@ -28,12 +33,22 @@ def main():
             {'host_name': host, 'admin_exceptions': bad_admins,
              'orphans': orphans}
         )
-    results_file.close()
-    results_read = DictReader(results_file)
+    results_write.close()
+    results_read = open('audit_results.csv', 'r')
+    r_reader = DictReader(results_read, fieldnames=fields)
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
         alive_int, total_int
     )
-    print(msg_body)
+    for row in r_reader:
+        msg_body = msg_body + (
+            '*' * 32 + '\n' +
+            '%s results:\nOrphans: %s\nAdmin Exceptions: %s\n' % (
+                row['host_name'], row['orphans'], row['admin_exceptions']
+            )
+        )
+    mailSend(sender, recipient, 'Monthly Security Review Report',
+             smtp_server, msg_body)
+    results_read.close()
 
 
 if __name__ == '__main__':

@@ -12,7 +12,7 @@ class getConfig:
 
     def GetMailSender(self):
         """Gets mail sender"""
-        config = open(self.fn, 'r+b')
+        config = open(self.fn, 'r', encoding='ascii')
         for line in config:
             sender = search(r'(MailSender: )(.+)', line)
             if sender:
@@ -21,7 +21,7 @@ class getConfig:
 
     def GetReportRcpts(self):
         """Gets report recipients"""
-        config = open(self.fn, 'r+b')
+        config = open(self.fn, 'r', encoding='ascii')
         for line in config:
             rcpts = search(r'(Recipients: )(.+)', line)
             if rcpts:
@@ -30,7 +30,7 @@ class getConfig:
 
     def GetSMTPServer(self):
         """Get a SMTP server name from config"""
-        config = open(self.fn, 'r+b')
+        config = open(self.fn, 'r', encoding='ascii')
         for line in config:
             smtpserver = search(r'(SMTP: )(.+)', line)
             if smtpserver:
