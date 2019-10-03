@@ -33,7 +33,7 @@ def main():
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
         alive_int, total_int
     )
-#    msg_body = msg_body
+    print(msg_body)
 
 
 if __name__ == '__main__':
