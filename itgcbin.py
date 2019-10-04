@@ -10,7 +10,7 @@ def getUsers(host):
     """Connect to host, get users, return list of users."""
     user_list = []
     no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
-                '|/sbin/shutdown$')
+                r'|/sbin/shutdown$')
     # Connect to remote system, get a list of all user accounts that
     # have an interactive shell.
     file_contents = run(
@@ -58,11 +58,13 @@ def getGroups(host):
 
 def getHosts(ossec_server):
     """Returns a list of all servers connected to an OSSEC server."""
-    audited_hosts = {'active_hosts':[], 'dead_hosts': []}
+    audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
-    hosts = run(
-        ['/usr/bin/ssh', ossec_server, 'sudo', '/var/ossec/bin/agent_control',
-         '-ls'], encoding='ascii', stdout=PIPE).stdout.split('\n')
+    if ValidateHN(ossec_server):
+        hosts = run(
+            ['/usr/bin/ssh', ossec_server, 'sudo',
+             '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
+            stdout=PIPE).stdout.split('\n')
     hostnames = []
     for host in hosts:
         if len(host) > 0 and ValidateHN(host.split(',')[1]):
@@ -94,10 +96,14 @@ def getADUsers(ossec_server):
     """Connects to ossec server, returns a list of AD users."""
     ad_user_list = []
     # Getting AD users from a file on the OSSEC server.
-    ad_users = run(
-        ['/usr/bin/ssh', ossec_server, 'sudo', 'cat',
-         '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
-         ).stdout.strip('\n').split('\n')
+    if ValidateHN(ossec_server):
+        ad_users = run(
+            ['/usr/bin/ssh', ossec_server, 'sudo', 'cat',
+             '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
+             ).stdout.strip('\n').split('\n')
+    else:
+        print('Invalid ossec server name.')
+        exit(1)
     # Parsing through the file, returning a list of users.
     for user in ad_users:
         username = user.split(':')[0]
