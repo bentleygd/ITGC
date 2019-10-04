@@ -49,7 +49,7 @@ def main():
             msg_body = msg_body + orphan
         msg_body = msg_body + '\n'
         msg_body = msg_body + 'Admin Exceptions: '
-        for exception in row['admin_exceptions']:
+        for exception in list(row['admin_exceptions']):
             msg_body = msg_body + exception + ' '
         msg_body = msg_body + '\n\n'
     msg_body = msg_body + (
