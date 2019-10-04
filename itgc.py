@@ -50,10 +50,7 @@ def main():
         msg_body = msg_body + '\n'
         msg_body = msg_body + 'Admin Exceptions: '
         for exception in row['admin_exceptions']:
-            msg_body = msg_body + (
-                dict(exception).keys + ': ' +
-                dict(exception).values + '\n'
-            )
+            msg_body = msg_body + exception + ' '
         msg_body = msg_body + '\n'
     msg_body = msg_body + (
         'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
