@@ -34,13 +34,13 @@ def main():
              'orphans': orphans}
         )
     results_write.close()
-    results_read = open('audit_results.csv', 'r')
-    r_reader = DictReader(results_read, fieldnames=fields, newline='')
+    results_read = open('audit_results.csv', 'r', newline='')
+    r_reader = DictReader(results_read, fieldnames=fields)
     record_count = len(r_reader)
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
         alive_int, total_int
     )
-    for row in r_reader[1:record_count]:
+    for row in r_reade[1:len(record_count)]:
         msg_body = msg_body + (
             '*' * 32 + '\n' +
             '%s results:\nOrphans: %s\nAdmin Exceptions: %s\n' % (
