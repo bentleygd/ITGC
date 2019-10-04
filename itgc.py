@@ -41,7 +41,7 @@ def main():
     )
     for row in r_reader:
         msg_body = msg_body + (
-            '*' * 32 + '\n' +
+            '*' * 64 + '\n' +
             '%s results:\n' % row['host_name']
         )
         msg_body = msg_body + 'Accounts active past term: '
@@ -53,7 +53,9 @@ def main():
             msg_body = msg_body + exception
         msg_body = msg_body + '\n\n'
     msg_body = msg_body + (
+        '*' * 64 +
         'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
+        '*' * 64 +
         'Dead Hosts: %s\n' % (host_list.get('dead_hosts'))
     )
     mailSend(sender, recipient, 'SOX Monthly Security Review Report',
