@@ -35,17 +35,22 @@ def main():
         )
     results_write.close()
     results_read = open('audit_results.csv', 'r')
-    r_reader = DictReader(results_read, fieldnames=fields)
+    r_reader = DictReader(results_read, fieldnames=fields, newline='')
+    record_count = len(r_reader)
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
         alive_int, total_int
     )
-    for row in r_reader:
+    for row in r_reader[1:record_count]:
         msg_body = msg_body + (
             '*' * 32 + '\n' +
             '%s results:\nOrphans: %s\nAdmin Exceptions: %s\n' % (
                 row['host_name'], row['orphans'], row['admin_exceptions']
             )
         )
+    msg_body = msg_body + (
+        'Alive Hosts:', host_list.get('active_hosts') + '\n' +
+        'Dead Hosts:', host_list.get('dead_hosts') + '\n'
+    )
     mailSend(sender, recipient, 'Monthly Security Review Report',
              smtp_server, msg_body)
     results_read.close()
