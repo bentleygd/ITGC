@@ -35,7 +35,7 @@ def main():
         )
     results_write.close()
     results_read = open('audit_results.csv', 'r', newline='')
-    r_reader = DictReader(results_read, fieldnames=fields)
+    r_reader = DictReader(results_read)
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
         alive_int, total_int
     )
