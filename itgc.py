@@ -45,8 +45,8 @@ def main():
             '%s results:\n' % row['host_name']
         )
         msg_body = msg_body + 'Accounts active past term: '
-        for orphan in row['orphans']:
-            msg_body = msg_body + orphan + ' '
+        for orphan in list(row['orphans']):
+            msg_body = msg_body + orphan
         msg_body = msg_body + '\n'
         msg_body = msg_body + 'Admin Exceptions: '
         for exception in row['admin_exceptions']:
