@@ -40,18 +40,26 @@ def main():
         alive_int, total_int
     )
     for row in r_reader:
-        if row['host_name'] is not None:
+        msg_body = msg_body + (
+            '*' * 32 + '\n' +
+            '%s results:\n' % row['host_name']
+        )
+        msg_body = msg_body + 'Accounts active past term: '
+        for orphan in row['orphans']:
+            msg_body = msg_body + orphan + ' '
+        msg_body = msg_body + '\n'
+        msg_body = msg_body + 'Admin Exceptions: '
+        for exception in row['admin_exceptions']:
             msg_body = msg_body + (
-                '*' * 32 + '\n' +
-                '%s results:\nOrphans: %s\nAdmin Exceptions: %s\n' % (
-                    row['host_name'], row['orphans'], row['admin_exceptions']
-                )
+                exception.keys + ': ' +
+                exception.values + '\n'
             )
+        msg_body = msg_body + '\n'
     msg_body = msg_body + (
         'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
         'Dead Hosts: %s\n' % (host_list.get('dead_hosts'))
     )
-    mailSend(sender, recipient, 'Monthly Security Review Report',
+    mailSend(sender, recipient, 'SOX Monthly Security Review Report',
              smtp_server, msg_body)
     results_read.close()
 
