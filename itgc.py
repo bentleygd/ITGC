@@ -34,6 +34,7 @@ def main():
              'orphans': orphans}
         )
     results_write.close()
+    # Parsing the results of the audit.
     results_read = open('audit_results.csv', 'r', newline='')
     r_reader = DictReader(results_read)
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
@@ -53,11 +54,12 @@ def main():
             msg_body = msg_body + exception
         msg_body = msg_body + '\n\n'
     msg_body = msg_body + (
-        '*' * 64 + '\n'
+        '*' * 64 + '\n' +
         'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
-        '*' * 64 + '\n'
+        '*' * 64 + '\n' +
         'Dead Hosts: %s\n' % (host_list.get('dead_hosts'))
     )
+    # Emailing a report with the audit findings.
     mailSend(sender, recipient, 'SOX Monthly Security Review Report',
              smtp_server, msg_body)
     results_read.close()
