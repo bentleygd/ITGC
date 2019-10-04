@@ -69,7 +69,7 @@ def getHosts(ossec_server):
     for host in hosts:
         if len(host) > 0 and ValidateHN(host.split(',')[1]):
             hostnames.append(host.split(',')[1])
-    for hostname in hostnames[1:5]:
+    for hostname in hostnames[1:6]:
         try:
             # Testing DNS resolution and the ability to connect to TCP
             # 22 on remote host.  If these checks fail, add the host
