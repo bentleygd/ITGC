@@ -48,8 +48,8 @@ def main():
                 )
             )
     msg_body = msg_body + (
-        'Alive Hosts:', host_list.get('active_hosts') + '\n' +
-        'Dead Hosts:', host_list.get('dead_hosts') + '\n'
+        'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
+        'Dead Hosts: %s\n' % (host_list.get('dead_hosts'))
     )
     mailSend(sender, recipient, 'Monthly Security Review Report',
              smtp_server, msg_body)
