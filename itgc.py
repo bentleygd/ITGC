@@ -39,13 +39,14 @@ def main():
     msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
         alive_int, total_int
     )
-    for row in r_reader[1:alive_int]:
-        msg_body = msg_body + (
-            '*' * 32 + '\n' +
-            '%s results:\nOrphans: %s\nAdmin Exceptions: %s\n' % (
-                row['host_name'], row['orphans'], row['admin_exceptions']
+    for row in r_reader:
+        if row['host_name'] is not None:
+            msg_body = msg_body + (
+                '*' * 32 + '\n' +
+                '%s results:\nOrphans: %s\nAdmin Exceptions: %s\n' % (
+                    row['host_name'], row['orphans'], row['admin_exceptions']
+                )
             )
-        )
     msg_body = msg_body + (
         'Alive Hosts:', host_list.get('active_hosts') + '\n' +
         'Dead Hosts:', host_list.get('dead_hosts') + '\n'
