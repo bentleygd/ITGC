@@ -57,7 +57,7 @@ def main():
         '*' * 64 + '\n' +
         'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
         '*' * 64 + '\n' +
-        'Dead Hosts: %s\n' % (host_list.get('dead_hosts'))
+        'Unreachlable Hosts: %s\n' % (host_list.get('dead_hosts'))
     )
     # Emailing a report with the audit findings.
     mailSend(sender, recipient, 'SOX Monthly Security Review Report',
