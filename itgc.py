@@ -55,7 +55,7 @@ def main():
         msg_body = msg_body + '\n\n'
     msg_body = msg_body + (
         '*' * 64 + '\n' +
-        'Alive Hosts: %s\n' % (host_list.get('active_hosts')) +
+        'Active Hosts: %s\n' % (host_list.get('active_hosts')) +
         '*' * 64 + '\n' +
         'Unreachlable Hosts: %s\n' % (host_list.get('dead_hosts'))
     )
