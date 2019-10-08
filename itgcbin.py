@@ -18,7 +18,7 @@ def getUsers(host):
          '/etc/passwd'], encoding='ascii', stdout=PIPE
          ).stdout.strip('\n').split('\n')
     for line in file_contents:
-        shell = line.split(':')[6]
+        shell = line.split(':')[len(line.split(':')) - 1]
         username = line.split(':')[0]
         if not match(no_shell, shell) and ValidateUN(username):
             user_list.append(line.split(':')[0])
