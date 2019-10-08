@@ -86,6 +86,9 @@ def getHosts(ossec_server):
         except timeout:
             audited_hosts['dead_hosts'].append(hostname)
             continue
+        except ConnectionRefusedError:
+            audited_hosts['dead_hosts'].append(hostname)
+            continue
         if data is not None and len(str(data)) > 0:
             audited_hosts['active_hosts'].append(hostname)
         s.close()
