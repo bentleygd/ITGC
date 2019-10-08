@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from csv import DictWriter, DictReader
 from coreutils import mailSend, getConfig
+from time import time
 import itgcbin
 
 
@@ -24,6 +25,7 @@ def main():
     dead_int = len(host_list.get('dead_hosts'))
     total_int = alive_int + dead_int
     # Running the audit.
+    start = time()
     for host in host_list.get('active_hosts'):
         users = itgcbin.getUsers(host)
         admin_groups = itgcbin.getGroups(host)
@@ -58,6 +60,11 @@ def main():
         'Active Hosts: %s\n' % (host_list.get('active_hosts')) +
         '*' * 64 + '\n' +
         'Unreachlable Hosts: %s\n' % (host_list.get('dead_hosts'))
+    )
+    end = time()
+    diff = round(end - start, 2)
+    msg_body = msg_body + (
+        'Script execution time: %d seconds\n' % diff
     )
     # Emailing a report with the audit findings.
     mailSend(sender, recipient, 'SOX Monthly Security Review Report',

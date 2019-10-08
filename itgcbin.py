@@ -14,9 +14,9 @@ def getUsers(host):
     # Connect to remote system, get a list of all user accounts that
     # have an interactive shell.
     file_contents = run(
-        ['/usr/bin/ssh', host, 'cat', '/etc/passwd'],
-        encoding='ascii', stdout=PIPE
-        ).stdout.strip('\n').split('\n')
+        ['/usr/bin/ssh', '-oStrictHostKeyChecking=no', host, 'cat',
+         '/etc/passwd'], encoding='ascii', stdout=PIPE
+         ).stdout.strip('\n').split('\n')
     for line in file_contents:
         shell = line.split(':')[6]
         username = line.split(':')[0]
@@ -69,7 +69,7 @@ def getHosts(ossec_server):
     for host in hosts:
         if len(host) > 0 and ValidateHN(host.split(',')[1]):
             hostnames.append(host.split(',')[1])
-    for hostname in hostnames[1:31]:
+    for hostname in hostnames:
         try:
             # Testing DNS resolution and the ability to connect to TCP
             # 22 on remote host.  If these checks fail, add the host
