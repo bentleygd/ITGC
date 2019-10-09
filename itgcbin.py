@@ -61,7 +61,6 @@ def getLinuxHosts(ossec_server):
     audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
     hostnames = []
-    linux_hosts = []
     if ValidateHN(ossec_server):
         hosts = run(
             ['/usr/bin/ssh', ossec_server, 'sudo',
@@ -73,13 +72,11 @@ def getLinuxHosts(ossec_server):
             ['/usr/bin/ssh', ossec_server, 'sudo',
              '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
             encoding='ascii', stdout=PIPE).stdout.split(',')
-        hd_name = host_data[1]
-        hd_os_string = host_data[4]
+        if len(host_data[1]) > 0 and ValidateHN(host_data[1]):
+            hd_name = host_data[1]
+            hd_os_string = host_data[4]
         if match(r'^Linux', hd_os_string):
-            linux_hosts.append(hd_name)
-    for l_host in linux_hosts:
-        if len(l_host) > 0 and ValidateHN(l_host.split(',')[1]):
-            hostnames.append(l_host.split(',')[1])
+            hostnames.append(hd_name)
     for hostname in hostnames:
         try:
             # Testing DNS resolution and the ability to connect to TCP
