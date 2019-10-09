@@ -75,7 +75,7 @@ def getLinuxHosts(ossec_server):
         if len(host_data[1]) > 0 and ValidateHN(host_data[1]):
             hd_name = host_data[1]
             hd_os_string = host_data[4]
-        if match(r'^Linux', hd_os_string):
+        if not match(r'^AIX', hd_os_string):
             hostnames.append(hd_name)
     for hostname in hostnames:
         try:
