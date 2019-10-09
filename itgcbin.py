@@ -71,7 +71,7 @@ def getLinuxHosts(ossec_server):
         ossec_id = host.split(',')[0]
         host_data = run(
             ['/usr/bin/ssh', ossec_server, 'sudo',
-             '/var/ossec/bin/agent_control', '-si', ossec_id],
+             '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
             encoding='ascii', stdout=PIPE).stdout.split(',')
         hd_name = host_data[1]
         hd_os_string = host_data[4]
