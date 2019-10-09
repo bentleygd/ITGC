@@ -93,12 +93,12 @@ def main():
         start = time()
         for host in aix_host_list.get('active_hosts'):
             users = itgcbin.getUsers(host)
-            admin_groups = itgcbin.getGroups(host, 'monitored_groups.list')
+            admin_groups = itgcbin.getGroups(host, 'aix_m_groups.list')
             orphans = str(itgcbin.getOrphans(
-                users, ad_users, 'exclusions.list'
+                users, ad_users, 'aix_ex.list'
                 ))
             bad_admins = itgcbin.getAdminEx(
-                'known_admins.list', admin_groups
+                'aix_admins.list', admin_groups
             )
             results.writerow(
                 {'host_name': host, 'admin_exceptions': bad_admins,
