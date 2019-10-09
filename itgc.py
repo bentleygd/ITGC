@@ -126,9 +126,9 @@ def main():
             msg_body = msg_body + '\n\n'
         msg_body = msg_body + (
             '*' * 64 + '\n' +
-            'Active Hosts: %s\n' % (linux_host_list.get('active_hosts')) +
+            'Active Hosts: %s\n' % (aix_host_list.get('active_hosts')) +
             '*' * 64 + '\n' +
-            'Unreachlable Hosts: %s\n' % (linux_host_list.get('dead_hosts'))
+            'Unreachlable Hosts: %s\n' % (aix_host_list.get('dead_hosts'))
         )
         end = time()
         diff = round(end - start, 2)
@@ -136,7 +136,7 @@ def main():
             'Script execution time: %d seconds\n' % diff
         )
         # Emailing a report with the audit findings.
-        mailSend(sender, recipient, 'SOX Monthly Linux Security Review Report',
+        mailSend(sender, recipient, 'SOX Monthly AIX Security Review Report',
                  smtp_server, msg_body)
         results_read.close()
 
