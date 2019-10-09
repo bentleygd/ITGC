@@ -3,6 +3,7 @@ from subprocess import run, PIPE
 from re import match, search
 from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
 from socket import gaierror, timeout
+
 from validate import ValidateUN, ValidateHN
 
 
@@ -25,13 +26,13 @@ def getUsers(host):
     return user_list
 
 
-def getGroups(host):
+def getGroups(host, mgroup_file_name):
     """Connect to host, get monitored groups, return groups."""
     groups = []
     m_group_list = []
     monitored_groups = []
     # Obtaining groups to monitor.
-    m_groups = open('monitored_groups.list', mode='r', encoding='ascii')
+    m_groups = open(mgroup_file_name, mode='r', encoding='ascii')
     # Obtaining members of monitored groups from a remote host.
     host_groups = run(
         ['/usr/bin/ssh', host, 'cat', '/etc/group'],
@@ -103,6 +104,53 @@ def getLinuxHosts(ossec_server):
     return audited_hosts
 
 
+def getAIXHosts(ossec_server):
+    """Returns a list of all servers connected to an OSSEC server."""
+    audited_hosts = {'active_hosts': [], 'dead_hosts': []}
+    # Connect to OSSEC server, get a list of all agents.
+    hostnames = []
+    if ValidateHN(ossec_server):
+        hosts = run(
+            ['/usr/bin/ssh', ossec_server, 'sudo',
+             '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
+            stdout=PIPE).stdout.split('\n')
+    for host in hosts:
+        ossec_id = host.split(',')[0]
+        host_data = run(
+            ['/usr/bin/ssh', ossec_server, 'sudo',
+             '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
+            encoding='ascii', stdout=PIPE).stdout.split(',')
+        if len(host_data[1]) > 0 and ValidateHN(host_data[1]):
+            hd_name = host_data[1]
+            hd_os_string = host_data[4]
+        if match(r'^AIX', hd_os_string):
+            hostnames.append(hd_name)
+    for hostname in hostnames:
+        try:
+            # Testing DNS resolution and the ability to connect to TCP
+            # 22 on remote host.  If these checks fail, add the host
+            # to the list of hosts that do not respond.
+            host_ip = gethostbyname(hostname)
+            s = socket(AF_INET, SOCK_STREAM)
+            s.settimeout(2)
+            s.connect((host_ip, 22))
+            s.send(b'\n\n')
+            data = s.recv(4096)
+        except gaierror:
+            audited_hosts['dead_hosts'].append(hostname)
+            continue
+        except timeout:
+            audited_hosts['dead_hosts'].append(hostname)
+            continue
+        except ConnectionRefusedError:
+            audited_hosts['dead_hosts'].append(hostname)
+            continue
+        if data is not None and len(str(data)) > 0:
+            audited_hosts['active_hosts'].append(hostname)
+        s.close()
+    return audited_hosts
+
+
 def getADUsers(ossec_server):
     """Connects to ossec server, returns a list of AD users."""
     ad_user_list = []
@@ -123,11 +171,11 @@ def getADUsers(ossec_server):
     return ad_user_list
 
 
-def getOrphans(local_users, ad_users):
+def getOrphans(local_users, ad_users, exclusion_file):
     """Compares user lists, returns list of users not in AD."""
     t_users = []
     # Getting excluded users.
-    ex_file = open('exclusions.list', 'r', encoding='ascii')
+    ex_file = open(exclusion_file, 'r', encoding='ascii')
     sys_accts = [exclusion.strip('\n') for exclusion in ex_file]
     ex_file.close()
     # Performing list comparison, returning users not in AD.
