@@ -56,19 +56,29 @@ def getGroups(host):
     return monitored_groups
 
 
-def getHosts(ossec_server):
+def getLinuxHosts(ossec_server):
     """Returns a list of all servers connected to an OSSEC server."""
     audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
+    hostnames = []
+    linux_hosts = []
     if ValidateHN(ossec_server):
         hosts = run(
             ['/usr/bin/ssh', ossec_server, 'sudo',
              '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
             stdout=PIPE).stdout.split('\n')
-    hostnames = []
     for host in hosts:
-        if len(host) > 0 and ValidateHN(host.split(',')[1]):
-            hostnames.append(host.split(',')[1])
+        host_data = run(
+            ['/usr/bin/ssh', ossec_server, 'sudo',
+             '/var/ossec/bin/agent_control', '-is', host.split(',')[0]],
+            encoding='ascii', stdout=PIPE).stdout.split(',')
+        hd_name = host_data[1]
+        hd_os_string = host_data[4]
+        if match(r'^Linux', hd_os_string):
+            linux_hosts.append(hd_name)
+    for l_host in linux_hosts:
+        if len(l_host) > 0 and ValidateHN(l_host.split(',')[1]):
+            hostnames.append(l_host.split(',')[1])
     for hostname in hostnames:
         try:
             # Testing DNS resolution and the ability to connect to TCP

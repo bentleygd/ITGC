@@ -19,14 +19,14 @@ def main():
     smtp_server = config.GetSMTPServer()
     # Getting audit info.
     ossec_server = open('ossec.cnf', 'r', encoding='ascii').read().strip('\n')
-    host_list = itgcbin.getHosts(ossec_server)
+    linux_host_list = itgcbin.getLinuxHosts(ossec_server)
     ad_users = itgcbin.getADUsers(ossec_server)
-    alive_int = len(host_list.get('active_hosts'))
-    dead_int = len(host_list.get('dead_hosts'))
+    alive_int = len(linux_host_list.get('active_hosts'))
+    dead_int = len(linux_host_list.get('dead_hosts'))
     total_int = alive_int + dead_int
-    # Running the audit.
+    # Running the audit for Linux.
     start = time()
-    for host in host_list.get('active_hosts'):
+    for host in linux_host_list.get('active_hosts'):
         users = itgcbin.getUsers(host)
         admin_groups = itgcbin.getGroups(host)
         orphans = str(itgcbin.getOrphans(users, ad_users))
@@ -57,9 +57,9 @@ def main():
         msg_body = msg_body + '\n\n'
     msg_body = msg_body + (
         '*' * 64 + '\n' +
-        'Active Hosts: %s\n' % (host_list.get('active_hosts')) +
+        'Active Hosts: %s\n' % (linux_host_list.get('active_hosts')) +
         '*' * 64 + '\n' +
-        'Unreachlable Hosts: %s\n' % (host_list.get('dead_hosts'))
+        'Unreachlable Hosts: %s\n' % (linux_host_list.get('dead_hosts'))
     )
     end = time()
     diff = round(end - start, 2)
@@ -67,7 +67,7 @@ def main():
         'Script execution time: %d seconds\n' % diff
     )
     # Emailing a report with the audit findings.
-    mailSend(sender, recipient, 'SOX Monthly Security Review Report',
+    mailSend(sender, recipient, 'SOX Monthly Linux Security Review Report',
              smtp_server, msg_body)
     results_read.close()
 
