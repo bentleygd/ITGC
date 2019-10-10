@@ -22,8 +22,7 @@ def getUsers(host):
     for line in file_contents:
         shell = line.split(':')[len(line.split(':')) - 1]
         username = line.split(':')[0]
-        if (not match(no_shell, shell) and ValidateUN(username)
-                and len(shell) > 1):
+        if not match(no_shell, shell) and ValidateUN(username):
             user_list.append(line.split(':')[0])
     return user_list
 
