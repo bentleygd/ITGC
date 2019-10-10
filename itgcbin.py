@@ -22,7 +22,8 @@ def getUsers(host):
     for line in file_contents:
         shell = line.split(':')[len(line.split(':')) - 1]
         username = line.split(':')[0]
-        if not match(no_shell, shell) and ValidateUN(username):
+        if (not match(no_shell, shell) and ValidateUN(username)
+                and len(shell) > 1):
             user_list.append(line.split(':')[0])
     return user_list
 
@@ -45,8 +46,7 @@ def getGroups(host, mgroup_file_name):
         for host_group in host_groups:
             if (search(r_exp, host_group) and
                 host_group.split(':')[3] is not None and
-                len(host_group.split(':')[3]) > 0):
-                # If all are true, append.
+                    len(host_group.split(':')[3]) > 0):
                 m_group_list.append(host_group)
     # Returning monitored groups and their members as a list of
     # dictionaries.
