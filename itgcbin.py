@@ -130,7 +130,7 @@ def getAIXHosts(ossec_server):
         aix_known_hosts = open('aix_known_hosts.txt', 'r', encoding='ascii')
         for aix_host in aix_known_hosts:
             aix_hn = aix_host.strip('\n') + '.24hourfit.com'
-            if aix_hn not in hostnames:
+            if aix_hn not in hostnames and ValidateHN(aix_hn):
                 hostnames.append(aix_hn)
         aix_known_hosts.close()
     for hostname in hostnames:
