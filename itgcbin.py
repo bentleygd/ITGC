@@ -3,6 +3,7 @@ from subprocess import run, PIPE
 from re import match, search
 from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
 from socket import gaierror, timeout
+from os.path import exists
 
 from validate import ValidateUN, ValidateHN
 
@@ -125,6 +126,13 @@ def getAIXHosts(ossec_server):
             hd_os_string = host_data[4]
         if match(r'^AIX', hd_os_string):
             hostnames.append(hd_name)
+    if exists('aix_known_hosts.txt'):
+        aix_known_hosts = open('aix_known_hosts.txt', 'r', encoding='ascii')
+        for aix_host in aix_known_hosts:
+            aix_hn = aix_host.strip('\n') + '.24hourfit.com'
+            if aix_hn not in hostnames:
+                hostnames.append(aix_hn)
+        aix_known_hosts.close()
     for hostname in hostnames:
         try:
             # Testing DNS resolution and the ability to connect to TCP

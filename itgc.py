@@ -85,12 +85,6 @@ def main():
 
     if args.os == 'AIX':
         aix_host_list = itgcbin.getAIXHosts(ossec_server)
-        aix_host_file = open('aix_known_hosts.txt', 'r', encoding='ascii')
-        for aix_host in aix_host_file:
-            hostname = aix_host + '.24hourfit.com'
-            if hostname not in aix_host_list:
-                aix_host_list['active_hosts'].append(hostname)
-        aix_host_file.close()
         ad_users = itgcbin.getADUsers(ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
