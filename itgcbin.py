@@ -12,7 +12,7 @@ def getUsers(host):
     """Connect to host, get users, return list of users."""
     user_list = []
     no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
-                r'|/sbin/shutdown$')
+                r'|/sbin/shutdown$|/usr/sbin/nologin$')
     # Connect to remote system, get a list of all user accounts that
     # have an interactive shell.
     file_contents = run(

@@ -8,11 +8,11 @@ import itgcbin
 
 
 def main():
+    """Doing the thing."""
     # Setting up an argument parser.
     a_parse = ArgumentParser(description='SOX security reviews')
     a_parse.add_argument('os', type=str, help='Linux or AIX')
     args = a_parse.parse_args()
-    """Doing the thing."""
     # Setting up the results file.
     results_write = open('audit_results.csv', 'w')
     fields = ['host_name', 'admin_exceptions', 'orphans']
