@@ -27,13 +27,13 @@ def main():
     ossec_server = open('ossec.cnf', 'r', encoding='ascii').read().strip('\n')
 
     if args.os == 'Linux':
+        start = time()
         linux_host_list = itgcbin.getLinuxHosts(ossec_server)
         ad_users = itgcbin.getADUsers(ossec_server)
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
         # Running the audit for Linux.
-        start = time()
         for host in linux_host_list.get('active_hosts'):
             users = itgcbin.getUsers(host)
             admin_groups = itgcbin.getGroups(host, 'monitored_groups.list')
@@ -84,13 +84,13 @@ def main():
         results_read.close()
 
     if args.os == 'AIX':
+        start = time()
         aix_host_list = itgcbin.getAIXHosts(ossec_server)
         ad_users = itgcbin.getADUsers(ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
         # Running the audit for Linux.
-        start = time()
         for host in aix_host_list.get('active_hosts'):
             users = itgcbin.getUsers(host)
             admin_groups = itgcbin.getGroups(host, 'aix_m_groups.list')
