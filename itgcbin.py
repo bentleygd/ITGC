@@ -85,7 +85,7 @@ def getLinuxHosts(ossec_server):
             # to the list of hosts that do not respond.
             host_ip = gethostbyname(hostname)
             s = socket(AF_INET, SOCK_STREAM)
-            s.settimeout(2)
+            s.settimeout(5)
             s.connect((host_ip, 22))
             s.send(b'\n\n')
             data = s.recv(4096)
@@ -139,7 +139,7 @@ def getAIXHosts(ossec_server):
             # to the list of hosts that do not respond.
             host_ip = gethostbyname(hostname)
             s = socket(AF_INET, SOCK_STREAM)
-            s.settimeout(2)
+            s.settimeout(5)
             s.connect((host_ip, 22))
             s.send(b'\n\n')
             data = s.recv(4096)
