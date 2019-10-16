@@ -13,7 +13,8 @@ def main():
     # Setting up an argument parser.
     a_parse = ArgumentParser(description='SOX security reviews')
     a_parse.add_argument('os', type=str, help='Linux or AIX')
-    a_parse.add_argument('-R', '--remove', store=True, help='')
+    a_parse.add_argument('-R', '--remove', action='store_true',
+                         help='Removes users with no AD account.')
     args = a_parse.parse_args()
     # Setting up the results file.
     results_write = open('audit_results.csv', 'w')
@@ -105,6 +106,7 @@ def main():
                     warn('Unable to delete users as expected', Warning)
             except Warning:
                 print('Warning reported for %s') % (host)
+                print('The return code i')
         results_write.close()
         # Parsing the results of the audit.
         results_read = open('audit_results.csv', 'r', newline='')
