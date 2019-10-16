@@ -2,6 +2,7 @@
 from csv import DictWriter, DictReader
 from time import time
 from argparse import ArgumentParser
+from warnings import warn
 
 from coreutils import mailSend, getConfig
 import itgcbin
@@ -12,6 +13,7 @@ def main():
     # Setting up an argument parser.
     a_parse = ArgumentParser(description='SOX security reviews')
     a_parse.add_argument('os', type=str, help='Linux or AIX')
+    a_parse.add_argument('-R', '--remove', store=True, help='')
     args = a_parse.parse_args()
     # Setting up the results file.
     results_write = open('audit_results.csv', 'w')
@@ -28,16 +30,16 @@ def main():
 
     if args.os == 'Linux':
         start = time()
-        linux_host_list = itgcbin.getLinuxHosts(ossec_server)
-        ad_users = itgcbin.getADUsers(ossec_server)
+        linux_host_list = itgcbin.get_linux_hosts(ossec_server)
+        ad_users = itgcbin.get_ad_users(ossec_server)
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
         # Running the audit for Linux.
         for host in linux_host_list.get('active_hosts'):
-            users = itgcbin.getUsers(host)
-            admin_groups = itgcbin.getGroups(host, 'monitored_groups.list')
-            orphans = str(itgcbin.getOrphans(
+            users = itgcbin.get_users(host)
+            admin_groups = itgcbin.get_groups(host, 'monitored_groups.list')
+            orphans = str(itgcbin.get_orphans(
                 users, ad_users, 'exclusions.list'
                 ))
             bad_admins = itgcbin.getAdminEx(
@@ -83,18 +85,72 @@ def main():
                  smtp_server, msg_body)
         results_read.close()
 
+    if args.os == 'Linux' and args.remove:
+        start = time()
+        linux_host_list = itgcbin.get_linux_hosts(ossec_server)
+        ad_users = itgcbin.get_ad_users(ossec_server)
+        alive_int = len(linux_host_list.get('active_hosts'))
+        dead_int = len(linux_host_list.get('dead_hosts'))
+        total_int = alive_int + dead_int
+        # Running the audit for Linux.
+        for host in linux_host_list.get('active_hosts'):
+            users = itgcbin.get_users(host)
+            orphans = str(itgcbin.get_orphans(
+                users, ad_users, 'exclusions.list'
+                ))
+            results.writerow({'host_name': host, 'orphans': orphans})
+            try:
+                orphan_rem_status = itgcbin.rem_orphans(host, orphans)
+                if not orphan_rem_status.get('r_code') == 0:
+                    warn('Unable to delete users as expected', Warning)
+            except Warning:
+                print('Warning reported for %s') % (host)
+        results_write.close()
+        # Parsing the results of the audit.
+        results_read = open('audit_results.csv', 'r', newline='')
+        r_reader = DictReader(results_read)
+        msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
+            alive_int, total_int
+        )
+        for row in r_reader:
+            msg_body = msg_body + (
+                '*' * 64 + '\n' +
+                '%s results:\n' % row['host_name']
+            )
+            msg_body = msg_body + 'Accounts Deleted: '
+            for orphan in list(row['orphans']):
+                msg_body = msg_body + orphan
+            msg_body = msg_body + '\n\n'
+        msg_body = msg_body + (
+            '*' * 64 + '\n' +
+            'Active Hosts: %s\n' % (linux_host_list.get('active_hosts')) +
+            '*' * 64 + '\n' +
+            'Unreachlable Hosts: %s\n' % (linux_host_list.get('dead_hosts'))
+        )
+        end = time()
+        diff = round(end - start, 2)
+        msg_body = msg_body + (
+            'Script execution time: %d seconds\n' % diff
+        )
+        # Emailing a report with the audit findings.
+        mailSend(
+            sender, recipient, 'SOX Monthly Linux Security Clean Up Report',
+            smtp_server, msg_body
+            )
+        results_read.close()
+
     if args.os == 'AIX':
         start = time()
-        aix_host_list = itgcbin.getAIXHosts(ossec_server)
-        ad_users = itgcbin.getADUsers(ossec_server)
+        aix_host_list = itgcbin.get_aix_hosts(ossec_server)
+        ad_users = itgcbin.get_ad_users(ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
         # Running the audit for Linux.
         for host in aix_host_list.get('active_hosts'):
-            users = itgcbin.getUsers(host)
-            admin_groups = itgcbin.getGroups(host, 'aix_m_groups.list')
-            orphans = str(itgcbin.getOrphans(
+            users = itgcbin.get_users(host)
+            admin_groups = itgcbin.get_groups(host, 'aix_m_groups.list')
+            orphans = str(itgcbin.get_orphans(
                 users, ad_users, 'aix_ex.list'
                 ))
             bad_admins = itgcbin.getAdminEx(

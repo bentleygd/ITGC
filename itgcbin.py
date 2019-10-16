@@ -1,14 +1,14 @@
 #!/usr/bin/python3
-from subprocess import run, PIPE
+from subprocess import run, PIPE, CalledProcessError
 from re import match, search
 from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
 from socket import gaierror, timeout
 from os.path import exists
 
-from validate import ValidateUN, ValidateHN
+from validate import validate_un, validate_hn
 
 
-def getUsers(host):
+def get_users(host):
     """Connect to host, get users, return list of users."""
     user_list = []
     no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
@@ -22,12 +22,12 @@ def getUsers(host):
     for line in file_contents:
         shell = line.split(':')[len(line.split(':')) - 1]
         username = line.split(':')[0]
-        if not match(no_shell, shell) and ValidateUN(username):
+        if not match(no_shell, shell) and validate_un(username):
             user_list.append(line.split(':')[0])
     return user_list
 
 
-def getGroups(host, mgroup_file_name):
+def get_groups(host, mgroup_file_name):
     """Connect to host, get monitored groups, return groups."""
     groups = []
     m_group_list = []
@@ -57,12 +57,12 @@ def getGroups(host, mgroup_file_name):
     return monitored_groups
 
 
-def getLinuxHosts(ossec_server):
+def get_linux_hosts(ossec_server):
     """Returns a list of all servers connected to an OSSEC server."""
     audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
     hostnames = []
-    if ValidateHN(ossec_server):
+    if validate_hn(ossec_server):
         hosts = run(
             ['/usr/bin/ssh', ossec_server, 'sudo',
              '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
@@ -73,7 +73,7 @@ def getLinuxHosts(ossec_server):
             ['/usr/bin/ssh', ossec_server, 'sudo',
              '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
             encoding='ascii', stdout=PIPE).stdout.split(',')
-        if len(host_data[1]) > 0 and ValidateHN(host_data[1]):
+        if len(host_data[1]) > 0 and validate_hn(host_data[1]):
             hd_name = host_data[1]
             hd_os_string = host_data[4]
         if not match(r'^AIX', hd_os_string):
@@ -104,12 +104,12 @@ def getLinuxHosts(ossec_server):
     return audited_hosts
 
 
-def getAIXHosts(ossec_server):
+def get_aix_hosts(ossec_server):
     """Returns a list of all servers connected to an OSSEC server."""
     audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
     hostnames = []
-    if ValidateHN(ossec_server):
+    if validate_hn(ossec_server):
         hosts = run(
             ['/usr/bin/ssh', ossec_server, 'sudo',
              '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
@@ -120,7 +120,7 @@ def getAIXHosts(ossec_server):
             ['/usr/bin/ssh', ossec_server, 'sudo',
              '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
             encoding='ascii', stdout=PIPE).stdout.split(',')
-        if len(host_data[1]) > 0 and ValidateHN(host_data[1]):
+        if len(host_data[1]) > 0 and validate_hn(host_data[1]):
             hd_name = host_data[1]
             hd_os_string = host_data[4]
         if match(r'^AIX', hd_os_string):
@@ -129,7 +129,7 @@ def getAIXHosts(ossec_server):
         aix_known_hosts = open('aix_known_hosts.txt', 'r', encoding='ascii')
         for aix_host in aix_known_hosts:
             aix_hn = aix_host.strip('\n') + '.24hourfit.com'
-            if aix_hn not in hostnames and ValidateHN(aix_hn):
+            if aix_hn not in hostnames and validate_hn(aix_hn):
                 hostnames.append(aix_hn)
         aix_known_hosts.close()
     for hostname in hostnames:
@@ -158,11 +158,11 @@ def getAIXHosts(ossec_server):
     return audited_hosts
 
 
-def getADUsers(ossec_server):
+def get_ad_users(ossec_server):
     """Connects to ossec server, returns a list of AD users."""
     ad_user_list = []
     # Getting AD users from a file on the OSSEC server.
-    if ValidateHN(ossec_server):
+    if validate_hn(ossec_server):
         ad_users = run(
             ['/usr/bin/ssh', ossec_server, 'sudo', 'cat',
              '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
@@ -173,12 +173,12 @@ def getADUsers(ossec_server):
     # Parsing through the file, returning a list of users.
     for user in ad_users:
         username = user.split(':')[0]
-        if ValidateUN(username):
+        if validate_un(username):
             ad_user_list.append(username)
     return ad_user_list
 
 
-def getOrphans(local_users, ad_users, exclusion_file):
+def get_orphans(local_users, ad_users, exclusion_file):
     """Compares user lists, returns list of users not in AD."""
     t_users = []
     # Getting excluded users.
@@ -190,6 +190,20 @@ def getOrphans(local_users, ad_users, exclusion_file):
         if user not in ad_users and user not in sys_accts:
             t_users.append(user)
     return t_users
+
+
+def rem_orphans(host, orphans):
+    """Deletes users not in AD, returns process info."""
+    # Deleting users not in AD.
+    for user in orphans:
+        try:
+            purge = run([
+                '/usr/bin/ssh', host, 'sudo', '/usr/sbin/userdel',
+                user], stdout=PIPE, stderr=PIPE)
+            return {'r_code': 0, 'output': purge.stdout}
+        except CalledProcessError as purge_error:
+            return {'r_code': purge_error.returncode,
+                    'error': purge_error.stderr}
 
 
 def getAdminEx(kg_admin_fn, admin_list):
