@@ -59,7 +59,7 @@ def main():
                 '*' * 64 + '\n' +
                 '%s results:\n' % row['host_name']
             )
-            msg_body = msg_body + 'Accounts active past term: '
+            msg_body = msg_body + 'Accounts without AD account: '
             for orphan in list(row['orphans']):
                 msg_body = msg_body + orphan
             msg_body = msg_body + '\n'
@@ -116,7 +116,7 @@ def main():
                 '*' * 64 + '\n' +
                 '%s results:\n' % row['host_name']
             )
-            msg_body = msg_body + 'Accounts active past term: '
+            msg_body = msg_body + 'Accounts without AD account: '
             for orphan in list(row['orphans']):
                 msg_body = msg_body + orphan
             msg_body = msg_body + '\n'
