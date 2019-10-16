@@ -40,6 +40,8 @@ def main():
         for host in linux_host_list.get('active_hosts'):
             users = itgcbin.get_users(host)
             admin_groups = itgcbin.get_groups(host, 'monitored_groups.list')
+            if len(users) < 1:
+                orphans = ['Unable to retrieve users.']
             orphans = str(itgcbin.get_orphans(
                 users, ad_users, 'exclusions.list'
                 ))
@@ -106,7 +108,7 @@ def main():
                     warn('Unable to delete users as expected', Warning)
             except Warning:
                 print('Warning reported for %s') % (host)
-                print('The return code i')
+                print('The return code is %d') % (orphan_rem_status.get('r_code'))
         results_write.close()
         # Parsing the results of the audit.
         results_read = open('audit_results.csv', 'r', newline='')
@@ -152,6 +154,8 @@ def main():
         for host in aix_host_list.get('active_hosts'):
             users = itgcbin.get_users(host)
             admin_groups = itgcbin.get_groups(host, 'aix_m_groups.list')
+            if len(users) < 1:
+                orphans = ['Unable to retrieve users.']
             orphans = str(itgcbin.get_orphans(
                 users, ad_users, 'aix_ex.list'
                 ))
