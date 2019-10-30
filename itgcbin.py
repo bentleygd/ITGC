@@ -57,14 +57,16 @@ def get_groups(host, mgroup_file_name):
     return monitored_groups
 
 
-def get_linux_hosts(ossec_server):
+def get_linux_hosts(user, ossec_server):
     """Returns a list of all servers connected to an OSSEC server."""
     audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
     hostnames = []
+    auth_user = user
+    c_string = auth_user + '@' + ossec_server
     if validate_hn(ossec_server):
         hosts = run(
-            ['/usr/bin/ssh', ossec_server, 'sudo',
+            ['/usr/bin/ssh', c_string, 'sudo',
              '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
             stdout=PIPE).stdout.split('\n')
     for host in hosts:
@@ -158,13 +160,15 @@ def get_aix_hosts(ossec_server):
     return audited_hosts
 
 
-def get_ad_users(ossec_server):
+def get_ad_users(user, ossec_server):
     """Connects to ossec server, returns a list of AD users."""
     ad_user_list = []
     # Getting AD users from a file on the OSSEC server.
+    auth_user = user
+    c_string = auth_user + '@' + ossec_server
     if validate_hn(ossec_server):
         ad_users = run(
-            ['/usr/bin/ssh', ossec_server, 'sudo', 'cat',
+            ['/usr/bin/ssh', c_string, 'sudo', 'cat',
              '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
              ).stdout.strip('\n').split('\n')
     else:
