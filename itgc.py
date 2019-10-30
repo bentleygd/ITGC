@@ -23,6 +23,7 @@ def main():
     results.writeheader()
     # Setting mail configuration.
     config = getConfig('config.cnf')
+    user = config.GetSysUser()
     sender = config.GetMailSender()
     recipient = config.GetReportRcpts()
     smtp_server = config.GetSMTPServer()
@@ -31,8 +32,8 @@ def main():
 
     if args.os == 'Linux':
         start = time()
-        linux_host_list = itgcbin.get_linux_hosts(ossec_server)
-        ad_users = itgcbin.get_ad_users(ossec_server)
+        linux_host_list = itgcbin.get_linux_hosts(user, ossec_server)
+        ad_users = itgcbin.get_ad_users(user, ossec_server)
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
@@ -91,8 +92,8 @@ def main():
 
     if args.os == 'Linux' and args.remove:
         start = time()
-        linux_host_list = itgcbin.get_linux_hosts(ossec_server)
-        ad_users = itgcbin.get_ad_users(ossec_server)
+        linux_host_list = itgcbin.get_linux_hosts(user, ossec_server)
+        ad_users = itgcbin.get_ad_users(user, ossec_server)
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
@@ -149,7 +150,7 @@ def main():
     if args.os == 'AIX':
         start = time()
         aix_host_list = itgcbin.get_aix_hosts(ossec_server)
-        ad_users = itgcbin.get_ad_users(ossec_server)
+        ad_users = itgcbin.get_ad_users(user, ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int

@@ -37,6 +37,15 @@ class getConfig:
                 return smtpserver.group(2)
         config.close()
 
+    def GetSysUser(self):
+        """Docstring goes here."""
+        config = open(self.fn, 'r', encoding='ascii')
+        for line in config:
+            user = search(r'(SYS_USER: )(.+)', line)
+            if user:
+                return user.group(2)
+        config.close()
+
 
 def mailSend(mail_sender, mail_recipients, subject, mail_server, mail_body):
     """Simple function to send mail."""
