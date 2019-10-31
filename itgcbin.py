@@ -106,20 +106,21 @@ def get_linux_hosts(user, ossec_server):
     return audited_hosts
 
 
-def get_aix_hosts(ossec_server):
+def get_aix_hosts(user, ossec_server):
     """Returns a list of all servers connected to an OSSEC server."""
     audited_hosts = {'active_hosts': [], 'dead_hosts': []}
     # Connect to OSSEC server, get a list of all agents.
     hostnames = []
+    c_string = user + '@' + ossec_server
     if validate_hn(ossec_server):
         hosts = run(
-            ['/usr/bin/ssh', ossec_server, 'sudo',
+            ['/usr/bin/ssh', c_string, 'sudo',
              '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
             stdout=PIPE).stdout.split('\n')
     for host in hosts:
         ossec_id = host.split(',')[0]
         host_data = run(
-            ['/usr/bin/ssh', ossec_server, 'sudo',
+            ['/usr/bin/ssh', c_string, 'sudo',
              '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
             encoding='ascii', stdout=PIPE).stdout.split(',')
         if len(host_data[1]) > 0 and validate_hn(host_data[1]):
