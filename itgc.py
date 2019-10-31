@@ -149,7 +149,7 @@ def main():
 
     if args.os == 'AIX':
         start = time()
-        aix_host_list = itgcbin.get_aix_hosts(ossec_server)
+        aix_host_list = itgcbin.get_aix_hosts(user, ossec_server)
         ad_users = itgcbin.get_ad_users(user, ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
