@@ -97,10 +97,10 @@ def get_linux_hosts(user, ossec_server):
         except timeout:
             audited_hosts['dead_hosts'].append(hostname)
             continue
-        except OSError:
+        except ConnectionRefusedError:
             audited_hosts['dead_hosts'].append(hostname)
             continue
-        except ConnectionRefusedError:
+        except OSError:
             audited_hosts['dead_hosts'].append(hostname)
             continue
         if data is not None and len(str(data)) > 0:
