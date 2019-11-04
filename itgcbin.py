@@ -100,6 +100,9 @@ def get_linux_hosts(user, ossec_server):
         except ConnectionRefusedError:
             audited_hosts['dead_hosts'].append(hostname)
             continue
+        except OSError:
+            audited_hosts['dead_hosts'].append(hostname)
+            continue
         if data is not None and len(str(data)) > 0:
             audited_hosts['active_hosts'].append(hostname)
         s.close()
