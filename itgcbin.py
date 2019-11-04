@@ -97,9 +97,8 @@ def get_linux_hosts(user, ossec_server):
         except timeout:
             audited_hosts['dead_hosts'].append(hostname)
             continue
-        except OSError as RouteError:
-            if RouteError[0] == 113:
-                audited_hosts['dead_hosts'].append(hostname)
+        except OSError:
+            audited_hosts['dead_hosts'].append(hostname)
             continue
         except ConnectionRefusedError:
             audited_hosts['dead_hosts'].append(hostname)
