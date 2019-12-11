@@ -4,7 +4,7 @@ from time import time
 from argparse import ArgumentParser
 from warnings import warn
 
-from coreutils import mailSend, getConfig
+from coreutils import mail_send, getConfig
 import itgcbin
 
 
@@ -86,8 +86,8 @@ def main():
             'Script execution time: %d seconds\n' % diff
         )
         # Emailing a report with the audit findings.
-        mailSend(sender, recipient, 'SOX Monthly Linux Security Review Report',
-                 smtp_server, msg_body)
+        mail_send(sender, recipient, 'SOX Monthly Linux Security Review' +
+                  'Report', smtp_server, msg_body)
         results_read.close()
 
     if args.os == 'Linux' and args.remove:
@@ -141,7 +141,7 @@ def main():
             'Script execution time: %d seconds\n' % diff
         )
         # Emailing a report with the audit findings.
-        mailSend(
+        mail_send(
             sender, recipient, 'SOX Monthly Linux Security Clean Up Report',
             smtp_server, msg_body
             )
@@ -203,8 +203,8 @@ def main():
             'Script execution time: %d seconds\n' % diff
         )
         # Emailing a report with the audit findings.
-        mailSend(sender, recipient, 'SOX Monthly AIX Security Review Report',
-                 smtp_server, msg_body)
+        mail_send(sender, recipient, 'SOX Monthly AIX Security Review Report',
+                  smtp_server, msg_body)
         results_read.close()
 
 
