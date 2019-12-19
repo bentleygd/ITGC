@@ -35,8 +35,6 @@ class ITGCAudit:
         self.host_list = {}
         self.known_admins = []
         self.host_admins = []
-        self.admin_ex = []
-        self.audit_ex = []
         self.ad_users = []
 
     def get_admin_ex(self, known_admins, host_admins):
@@ -52,10 +50,11 @@ class ITGCAudit:
         access."""
         # Iterating over admin users from host, comparing them to
         # known good, returing any exceptions as a list.
+        admin_ex = []
         for user in host_admins:
             if user not in known_admins:
-                self.admin_ex.append(user)
-        return self.admin_ex
+                admin_ex.append(user)
+        return admin_ex
 
     def get_ad_users(self, user, ossec_server):
         """Connects to ossec server, returns a list of AD users.
@@ -96,11 +95,12 @@ class ITGCAudit:
         Outputs:
         audit_ex = list(), Users that are on the local system that do
         not have a corresponding AD account."""
+        audit_ex = []
         # Performing list comparison, returning users not in AD.
         for user in local_users:
             if user not in ad_users and user not in exclusions:
-                self.audit_ex.append(user)
-        return self.audit_ex
+                audit_ex.append(user)
+        return audit_ex
 
 
 class OracleDBAudit(ITGCAudit):
@@ -175,6 +175,7 @@ class OracleDBAudit(ITGCAudit):
         Raises:
         con_error - Unable to connect to the database.  Prints error
         message and exits with a status code of 1."""
+        self.db_users = []
         try:
             # Connecting to DB
             db_connection = connect(db_user, pwd, db_host)
@@ -212,6 +213,7 @@ class OracleDBAudit(ITGCAudit):
         Raises:
         con_error - Unable to connect to the database.  Prints error
         message and exits with a status code of 1."""
+        self.db_granted_roles = []
         # Connecting to DB
         try:
             db_connection = connect(db_user, pwd, db_host)
@@ -400,10 +402,7 @@ class UnixHostAudit(ITGCAudit):
         Outputs:
         admin_ex - list(), A list of admin exceptions (e.g., acounts that
         have admin access but are not on the approved list)."""
-        # audit_finding = []
-        # kg_admin_file = open(kg_admin_fn, 'r', encoding='ascii')
-        # kg_admins = [kg_admin.strip('\n') for kg_admin in kg_admin_file]
-        # kg_admin_file.close()
+        admin_ex = []
         for known_admin in known_admins:
             for admins in host_admins:
                 tested_group = known_admin.split(':')[0]
@@ -413,5 +412,5 @@ class UnixHostAudit(ITGCAudit):
                     for admin in admins.get(tested_group):
                         if admin not in known_admins:
                             audit_finding[tested_group].append(admin)
-                    self.admin_ex.append(audit_finding)
-        return self.admin_ex
+                    admin_ex.append(audit_finding)
+        return admin_ex

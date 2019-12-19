@@ -12,9 +12,7 @@ def main():
     """Doing the thing."""
     # Setting up an argument parser.
     a_parse = ArgumentParser(description='SOX security reviews')
-    a_parse.add_argument('os', type=str, help='Linux or AIX')
-    a_parse.add_argument('-R', '--remove', action='store_true',
-                         help='Removes users with no AD account.')
+    a_parse.add_argument('os', type=str, help='Linux, AIX or Oracle')
     args = a_parse.parse_args()
     # Setting up the results file.
     results_write = open('audit_results.csv', 'w')
@@ -104,7 +102,7 @@ def main():
     if args.os == 'AIX':
         AIXAudit = itgcbin.UnixHostAudit('AIX')
         # Variable initilization
-        monitored_groups = config['aix']['monitored_groups'].split(',')
+        monitored_groups = config['aix']['admin_groups'].split(',')
         exclusions = config['aix']['exclusions'].split(',')
         known_admins = []
         admin_file = open(
@@ -112,8 +110,12 @@ def main():
             )
         for admin_group in admin_file:
             known_admins.append(admin_group)
+        aix_known_hosts = config['aix']['known_hosts'].split(',')
         start = time()
         aix_host_list = AIXAudit.get_hosts(user, ossec_server)
+        for aix_host in aix_known_hosts:
+            if aix_host not in aix_host_list['active_hosts']:
+                aix_host_list['active_hosts'].append(aix_host)
         ad_users = AIXAudit.get_ad_users(user, ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
