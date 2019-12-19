@@ -4,8 +4,8 @@ from time import time
 from argparse import ArgumentParser
 from configparser import ConfigParser
 
-from coreutils import mail_send
-import itgcbin
+from lib.coreutils import mail_send
+from lib import itgcbin
 
 
 def main():

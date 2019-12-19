@@ -6,7 +6,7 @@ from socket import gaierror, timeout
 
 from cx_Oracle import connect, Error
 
-from validate import validate_un, validate_hn
+from lib.validate import validate_un, validate_hn
 
 
 class ITGCAudit:
