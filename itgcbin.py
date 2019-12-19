@@ -1,376 +1,417 @@
 #!/usr/bin/python3
-from subprocess import run, PIPE, CalledProcessError
+from subprocess import run, PIPE
 from re import match, search
 from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
 from socket import gaierror, timeout
-from os.path import exists
 
 from cx_Oracle import connect, Error
 
 from validate import validate_un, validate_hn
 
 
-def get_db_users(user, pwd, db_host):
-    """Connects to the database, returns a list of users.
+class ITGCAudit:
+    def __init__(self):
+        """Creates an AuditedSystem object.
 
-    Keyword Arguments:
-    user - str(), The database user to connect as.
-    pwd - str(), The user's password.
-    db_host - str(), The connection string of the database.
+        Keyword arguments:
+        None.
 
-    Outputs:
-    db_user_list - list(), A list of database users.
+        Attributes:
+        host_list - list(), The list of hosts that is audited by the
+        object.
+        known_admins - list(), The list of of known good admins.
+        admin_list - list(), The list of admins from an AuditedSystem.
+        admin_ex - list(), Users with unapproved admin privileges.
+        audit_ex - list(), Users with accounts that are active past
+        date of termination.
 
-    Raises:
-    con_error - Unable to connect to the database.  Prints error
-    message, connection error code and exits with a status code
-    of 1."""
-    try:
-        db_connection = connect(user, pwd, db_host)
-    except Error as con_error:
-        print('Unable to connect to DB. The error message is: %s\n' +
-              'The error code is: %s' % (con_error.message, con_error.code))
-        exit(1)
-    db_cursor = db_connection.cursor()
-    query = """SELECT username, profile
-               FROM dba_users
-               WHERE account_status = 'OPEN'
-               ORDER BY username"""
-    db_cursor.execute(query)
-    db_user_list = []
-    for row in db_cursor:
-        db_user_list.append(row)
-    return db_user_list
+        Methods:
+        get_admin_ex - Compares a list of users with admin privileges
+        to a list of known good admins and returns any exceptions.
+        get_ad_users - Connects to ossec server, returns a list of AD
+        users.
+        get_audit_ex - Compares a list of local users with users in
+        active directory and returns a list of exceptions."""
+        self.host_list = {}
+        self.known_admins = []
+        self.host_admins = []
+        self.admin_ex = []
+        self.audit_ex = []
+        self.ad_users = []
 
+    def get_admin_ex(self, known_admins, host_admins):
+        """Compares two lists, returns a list of exceptions.
 
-def get_dba_ex(kg_admins, dba_profs):
-    """Compares two lists, returns exceptions.
+        Keyword arguments:
+        known_admins - list(), Known admins who are approved to have
+        admin level privileges.
+        host_admins - list(), Admins from an audited host.
 
-    Keyword arguments:
-    kg_admins - list(), Known good admin list.
-    dba_profs - list(), Users with the DBA profile.
+        Outputs:
+        admin_ex - list(), Users who are not approved to have admin
+        access."""
+        # Iterating over admin users from host, comparing them to
+        # known good, returing any exceptions as a list.
+        for user in host_admins:
+            if user not in known_admins:
+                self.admin_ex.append(user)
+        return self.admin_ex
 
-    Outputs:
-    dba_ex - list(), Unauthorized accounts with the DBA profile."""
-    dba_ex = []
-    good_admins = kg_admins
-    dba_prof_users = dba_profs
-    for user in dba_prof_users:
-        if user not in good_admins:
-            dba_ex.append(user)
-    return dba_ex
+    def get_ad_users(self, user, ossec_server):
+        """Connects to ossec server, returns a list of AD users.
 
+        Keyword arguments:
+        user - str(), The user that will be connecting to the OSSEC
+        server.
+        ossec_sever - str(), The ossec server to connect to.
 
-def get_users(host):
-    """Connect to host, get users, return list of users.
+        Outputs:
+        ad_user_list - list(), Users in Active Directory."""
+        # Getting AD users from a file on the OSSEC server.
+        auth_user = user
+        c_string = auth_user + '@' + ossec_server
+        if validate_hn(ossec_server):
+            ad_users = run(
+                ['/usr/bin/ssh', c_string, 'sudo', 'cat',
+                 '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
+                 ).stdout.strip('\n').split('\n')
+        else:
+            print('Invalid ossec server name.')
+            exit(1)
+        # Parsing through the file, returning a list of users.
+        for user in ad_users:
+            username = user.split(':')[0]
+            if validate_un(username):
+                self.ad_users.append(username)
+        return self.ad_users
 
-    Keyword arguments:
-    host - str(), hostname of remote system.
+    def get_audit_ex(self, local_users, ad_users, exclusions):
+        """Compares user lists, returns list of users not in AD.
 
-    Outputs:
-    user_list - list(), users with a valid shell."""
-    user_list = []
-    no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
-                r'|/sbin/shutdown$|/usr/sbin/nologin$')
-    # Connect to remote system, get a list of all user accounts that
-    # have an interactive shell.
-    file_contents = run(
-        ['/usr/bin/ssh', '-oStrictHostKeyChecking=no', host, 'cat',
-         '/etc/passwd'], encoding='ascii', stdout=PIPE
-         ).stdout.strip('\n').split('\n')
-    for line in file_contents:
-        shell = line.split(':')[len(line.split(':')) - 1]
-        username = line.split(':')[0]
-        if not match(no_shell, shell) and validate_un(username):
-            user_list.append(line.split(':')[0])
-    return user_list
+        Keyword arguments:
+        local_users - list(), Local users on a system.
+        ad_users - list(), Users in active directory
+        exclusions - list(), Users to exclude from the audit.
 
-
-def get_groups(host, mgroup_file_name):
-    """Connect to host, get monitored groups, return groups.
-
-    Keyword arguments:
-    host - str(), The hostname of the remote system.
-    mgroup_file_name - str(), The file that contains the list of users
-    to retrieve.
-
-    Outputs:
-    monitred_groups - list(), The groups to check."""
-    groups = []
-    m_group_list = []
-    monitored_groups = []
-    # Obtaining groups to monitor.
-    m_groups = open(mgroup_file_name, mode='r', encoding='ascii')
-    # Obtaining members of monitored groups from a remote host.
-    host_groups = run(
-        ['/usr/bin/ssh', host, 'cat', '/etc/group'],
-        encoding='ascii', stdout=PIPE
-        ).stdout.strip('\n').split('\n')
-    groups = [line.strip('\n') for line in m_groups]
-    for group in groups:
-        r_exp = r'^' + str(group) + r'.+\d{4,6}:'
-        for host_group in host_groups:
-            if (search(r_exp, host_group) and
-                host_group.split(':')[3] is not None and
-                    len(host_group.split(':')[3]) > 0):
-                m_group_list.append(host_group)
-    # Returning monitored groups and their members as a list of
-    # dictionaries.
-    m_groups.close()
-    for m_group in m_group_list:
-        monitored_groups.append(
-            {m_group.split(':')[0]: m_group.split(':')[3].split(',')}
-        )
-    return monitored_groups
+        Outputs:
+        audit_ex = list(), Users that are on the local system that do
+        not have a corresponding AD account."""
+        # Performing list comparison, returning users not in AD.
+        for user in local_users:
+            if user not in ad_users and user not in exclusions:
+                self.audit_ex.append(user)
+        return self.audit_ex
 
 
-def get_linux_hosts(user, ossec_server):
-    """Returns a list of all Linux servers connected to an OSSEC
-    server.
+class OracleDBAudit(ITGCAudit):
+    def __init__(self):
+        """Oracle DB audit object
 
-    Keyword arguments:
-    user - str(), The user that will be connecting to the remote
-    system.
-    ossec_server - str(), The ossec server to connect to.
+        Keyword Arguments:
+        None
 
-    Outputs:
-    audited_hosts = list(), The hosts to audit.
+        Attributes:
+        db_user - str(), The user used to authenticate to the Oracle
+        DB and perform the audit.
+        db_user_list - list(), All users on the Oracle DB.
+        db_granted_roles - list(), The granted roles on the DB.
 
-    Raises:
-    gaierror - Occurs when DNS resolution of a hostname fails.
-    timeout - Occurs when connection via TCP 22 does not occur within
-    fie seconds.
-    ConnectionRefusedError - Occurs when the remote host actively
-    refuses a connetion attempt via TCP 22.
-    OSError - Any generic OS errors that occur when attempting to
-    connect to the remote host via TCP 22."""
-    audited_hosts = {'active_hosts': [], 'dead_hosts': []}
-    # Connect to OSSEC server, get a list of all agents.
-    hostnames = []
-    auth_user = user
-    c_string = auth_user + '@' + ossec_server
-    if validate_hn(ossec_server):
-        hosts = run(
-            ['/usr/bin/ssh', c_string, 'sudo',
-             '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
-            stdout=PIPE).stdout.split('\n')
-    for host in hosts:
-        ossec_id = host.split(',')[0]
-        host_data = run(
-            ['/usr/bin/ssh', ossec_server, 'sudo',
-             '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
-            encoding='ascii', stdout=PIPE).stdout.split(',')
-        if len(host_data[1]) > 0 and validate_hn(host_data[1]):
-            hd_name = host_data[1]
-            hd_os_string = host_data[4]
-        if not match(r'^AIX', hd_os_string):
-            hostnames.append(hd_name)
-    for hostname in hostnames:
+        Methods:
+        get_db_users - Retrieves all users from the dba_user table.
+        get_db_granted_roles - Retrieves all granted roles from the
+        dba_role_privs table.
+        get_db_list - Generates a list of reachable and unreachable
+        DBs."""
+        # Calling the parent's init to include parent's instance
+        # variables.
+        ITGCAudit.__init__(self)
+        self.db_user_list = []
+        self.db_granted_roles = []
+
+    def get_db_list(self, tns_file, db_user, db_pwd):
+        """Parses a tnsnames.ora file, returns DB host info.
+
+        Keyword Arguments:
+        tns_file - The tnsnames.ora file.
+
+        Outputs:
+        host_lost - Dict(), a dictionary containing reachable and
+        unreachable DBs."""
+        # Variable initialization.
+        db_names = []
+        self.host_list = {'active_hosts': [], 'dead_hosts': []}
+        # Parsing through tnsnames.ora to make a list of DBs to
+        # connect to.
+        tns_file = open(tns_file, 'r', encoding='ascii')
+        for line in tns_file:
+            db_parse = search(r'(^/S{4,12}) =', line)
+            if db_parse:
+                db_names.append(db_parse.group(1))
+        for db_name in db_names:
+            # Connecting to the DB.
+            try:
+                db_connection = connect(db_user, db_pwd, db_name)
+                # Populating host lists.
+                if db_connection:
+                    self.host_list['active_hosts'].append(db_name)
+            except Error:
+                self.host_list['dead_hosts'].append(db_name)
+            # Closing the DB connection.
+            db_connection.close()
+        return self.host_list
+
+    def get_db_users(self, db_user, pwd, db_host):
+        """Connects to the database, returns a list of users.
+
+        Keyword Arguments:
+        self.db_user - str(), The database user to connect as.
+        pwd - str(), The user's password.
+        db_host - str(), The DB SID.
+
+        Outputs:
+        db_user_list - list(), A list of database user dictionaries
+        containg the username and the profile of the user.
+
+        Raises:
+        con_error - Unable to connect to the database.  Prints error
+        message and exits with a status code of 1."""
         try:
-            # Testing DNS resolution and the ability to connect to TCP
-            # 22 on remote host.  If these checks fail, add the host
-            # to the list of hosts that do not respond.
-            host_ip = gethostbyname(hostname)
-            s = socket(AF_INET, SOCK_STREAM)
-            s.settimeout(5)
-            s.connect((host_ip, 22))
-            s.send(b'\n\n')
-            data = s.recv(4096)
-        except gaierror:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        except timeout:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        except ConnectionRefusedError:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        except OSError:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        if data is not None and len(str(data)) > 0:
-            audited_hosts['active_hosts'].append(hostname)
-        s.close()
-    return audited_hosts
+            # Connecting to DB
+            db_connection = connect(db_user, pwd, db_host)
+        except Error as con_error:
+            conError, = con_error.args
+            print('Unable to connect to DB. The error is:', conError.message)
+            exit(1)
+        db_cursor = db_connection.cursor()
+        # Executing query
+        query = """SELECT username, profile
+                   FROM dba_users
+                   ORDER BY username"""
+        db_cursor.execute(query)
+        # Iterating over query, converting them to a dict(), appending
+        # them to a list.
+        for row in db_cursor:
+            user_data = {'username': row[0], 'profile': row[1]}
+            self.db_user_list.append(user_data)
+        # Closing the DB connection.
+        db_connection.close()
+        return self.db_user_list
 
+    def get_db_granted_roles(self, db_user, pwd, db_host):
+        """Connects to the database, returns a list of users.
 
-def get_aix_hosts(user, ossec_server):
-    """Returns a list of all AIX servers connected to an OSSEC server.
+        Keyword Arguments:
+        user - str(), The database user to connect as.
+        pwd - str(), The user's password.
+        db_host - str(), The connection string of the database.
 
-    Keyword arguments:
-    user - str(), The user that will be connecting to the remote
-    system.
-    ossec_server - str(), The ossec server to connect to.
+        Outputs:
+        db_user_list - list(), A list of database user dictionaries
+        containg the granted role(s) of the user.
 
-    Outputs:
-    audited_hosts = list(), The hosts to audit.
-
-    Raises:
-    gaierror - Occurs when DNS resolution of a hostname fails.
-    timeout - Occurs when connection via TCP 22 does not occur within
-    fie seconds.
-    ConnectionRefusedError - Occurs when the remote host actively
-    refuses a connetion attempt via TCP 22.
-    OSError - Any generic OS errors that occur when attempting to
-    connect to the remote host via TCP 22."""
-    audited_hosts = {'active_hosts': [], 'dead_hosts': []}
-    # Connect to OSSEC server, get a list of all agents.
-    hostnames = []
-    c_string = user + '@' + ossec_server
-    if validate_hn(ossec_server):
-        hosts = run(
-            ['/usr/bin/ssh', c_string, 'sudo',
-             '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
-            stdout=PIPE).stdout.split('\n')
-    for host in hosts:
-        ossec_id = host.split(',')[0]
-        host_data = run(
-            ['/usr/bin/ssh', c_string, 'sudo',
-             '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
-            encoding='ascii', stdout=PIPE).stdout.split(',')
-        if len(host_data[1]) > 0 and validate_hn(host_data[1]):
-            hd_name = host_data[1]
-            hd_os_string = host_data[4]
-        if match(r'^AIX', hd_os_string):
-            hostnames.append(hd_name)
-    if exists('aix_known_hosts.txt'):
-        aix_known_hosts = open('aix_known_hosts.txt', 'r', encoding='ascii')
-        for aix_host in aix_known_hosts:
-            aix_hn = aix_host.strip('\n') + '.24hourfit.com'
-            if aix_hn not in hostnames and validate_hn(aix_hn):
-                hostnames.append(aix_hn)
-        aix_known_hosts.close()
-    for hostname in hostnames:
+        Raises:
+        con_error - Unable to connect to the database.  Prints error
+        message and exits with a status code of 1."""
+        # Connecting to DB
         try:
-            # Testing DNS resolution and the ability to connect to TCP
-            # 22 on remote host.  If these checks fail, add the host
-            # to the list of hosts that do not respond.
-            host_ip = gethostbyname(hostname)
-            s = socket(AF_INET, SOCK_STREAM)
-            s.settimeout(5)
-            s.connect((host_ip, 22))
-            s.send(b'\n\n')
-            data = s.recv(4096)
-        except gaierror:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        except timeout:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        except ConnectionRefusedError:
-            audited_hosts['dead_hosts'].append(hostname)
-            continue
-        if data is not None and len(str(data)) > 0:
-            audited_hosts['active_hosts'].append(hostname)
-        s.close()
-    return audited_hosts
+            db_connection = connect(db_user, pwd, db_host)
+        except Error as con_error:
+            conError, = con_error.args
+            print('Unable to connect to DB. The error is:', conError.message)
+            exit(1)
+        db_cursor = db_connection.cursor()
+        # Executing query
+        query = """SELECT grantee, granted_role, admin_option, default_role
+                   FROM dba_role_privs
+                   ORDER BY grantee, granted_role"""
+        db_cursor.execute(query)
+        # Iterating over results, converting them to a dict(), writing
+        # to a list.
+        for row in db_cursor:
+            user_data = {
+                'username': row[0], 'granted_role': row[1],
+                'admin_option': row[2], 'default_role': row[3]
+                }
+            self.db_granted_roles.append(user_data)
+        # Closing the DB connection.
+        db_connection.close()
+        return self.db_granted_roles
 
 
-def get_ad_users(user, ossec_server):
-    """Connects to ossec server, returns a list of AD users.
+class UnixHostAudit(ITGCAudit):
+    def __init__(self, os):
+        """A UnixAudit object.
 
-    Keyword arguments:
-    user - str(), The user that will be connecting to the OSSEC
-    server.
-    ossec_sever - str(), The ossec server to connect to.
+        Keyword Arugments:
+        os - The operating system (e.g., Linux)
 
-    Outputs:
-    ad_user_list - list(), Users in Active Directory."""
-    ad_user_list = []
-    # Getting AD users from a file on the OSSEC server.
-    auth_user = user
-    c_string = auth_user + '@' + ossec_server
-    if validate_hn(ossec_server):
-        ad_users = run(
-            ['/usr/bin/ssh', c_string, 'sudo', 'cat',
-             '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
+        Attributes:
+        os - The opertating sytem that is going to be audited.
+        local_users - The local users of the host that is audited.
+        audited_groups - The groups that are being audited as part of
+        the audit.
+
+        Methods:
+        get_users - Connects to host and generates a list of local
+        users.
+        get_groups - Connect to host and generates a list of users
+        in specific groups.
+        get_hosts - Connect to the OSSEC server and gather a list of
+        audited hosts based on OS (AIX or Linux).
+        """
+        ITGCAudit.__init__(self)
+        self.os = os
+        self.local_users = []
+        self.audited_groups = []
+
+    def get_users(self, host):
+        """Connect to host, get users, return list of users.
+
+        Keyword arguments:
+        host - str(), hostname of remote system.
+
+        Outputs:
+        self.local_users - list(), users with a valid shell."""
+        no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
+                    r'|/sbin/shutdown$|/usr/sbin/nologin$')
+        # Connect to remote system, get a list of all user accounts that
+        # have an interactive shell.
+        file_contents = run(
+            ['/usr/bin/ssh', '-oStrictHostKeyChecking=no', host, 'cat',
+             '/etc/passwd'], encoding='ascii', stdout=PIPE
              ).stdout.strip('\n').split('\n')
-    else:
-        print('Invalid ossec server name.')
-        exit(1)
-    # Parsing through the file, returning a list of users.
-    for user in ad_users:
-        username = user.split(':')[0]
-        if validate_un(username):
-            ad_user_list.append(username)
-    return ad_user_list
+        for line in file_contents:
+            shell = line.split(':')[len(line.split(':')) - 1]
+            username = line.split(':')[0]
+            if not match(no_shell, shell) and validate_un(username):
+                self.local_users.append(line.split(':')[0])
+        return self.local_users
 
+    def get_groups(self, host, monitored_groups):
+        """Connect to host, get all groups, return monitored groups.
 
-def get_orphans(local_users, ad_users, exclusion_file):
-    """Compares user lists, returns list of users not in AD.
+        Keyword arguments:
+        host - str(), The hostname of the remote system.
+        monitored_groups - list(), The list of admin groups to monitor.
 
-    Keyword arguments:
-    local_users - list(), Local users on a system.
-    ad_users - list(), Users in active directory
-    exclusion_file - file(), A file containing users to exclude from
-    the audit.
+        Outputs:
+        monitored_groups - list(), The groups to check."""
+        m_group_list = []
+        # Obtaining members of monitored groups from a remote host.
+        host_groups = run(
+            ['/usr/bin/ssh', host, 'cat', '/etc/group'],
+            encoding='ascii', stdout=PIPE
+            ).stdout.strip('\n').split('\n')
+        for group in monitored_groups:
+            r_exp = r'^' + str(group) + r'.+\d{4,6}:'
+            for host_group in host_groups:
+                if (search(r_exp, host_group) and
+                    host_group.split(':')[3] is not None and
+                        len(host_group.split(':')[3]) > 0):
+                    m_group_list.append(host_group)
+        # Returning monitored groups and their members as a list of
+        # dictionaries.
+        for m_group in m_group_list:
+            self.audited_groups.append(
+                {m_group.split(':')[0]: m_group.split(':')[3].split(',')}
+            )
+        return self.audited_groups
 
-    Outputs:
-    t_users = list(), Users that are on the local system that do not
-    have a corresponding AD account."""
-    t_users = []
-    # Getting excluded users.
-    ex_file = open(exclusion_file, 'r', encoding='ascii')
-    sys_accts = [exclusion.strip('\n') for exclusion in ex_file]
-    ex_file.close()
-    # Performing list comparison, returning users not in AD.
-    for user in local_users:
-        if user not in ad_users and user not in sys_accts:
-            t_users.append(user)
-    return t_users
+    def get_hosts(self, user, ossec_server):
+        """Returns a list of all Linux servers connected to an OSSEC
+        server.
 
+        Keyword arguments:
+        user - str(), The user that will be connecting to the remote
+        system.
+        ossec_server - str(), The ossec server to connect to.
 
-def rem_orphans(host, orphans):
-    """Deletes users not in AD, returns process info.
+        Outputs:
+        audited_hosts = list(), The hosts to audit.
 
-    Keyword arguments:
-    host - str(), The host to connect to.
-    orphans - list(), The list of users to remove.
+        Raises:
+        gaierror - Occurs when DNS resolution of a hostname fails.
+        timeout - Occurs when connection via TCP 22 does not occur
+        within five seconds.
+        ConnectionRefusedError - Occurs when the remote host actively
+        refuses a connetion attempt via TCP 22.
+        OSError - Any generic OS errors that occur when attempting to
+        connect to the remote host via TCP 22."""
+        self.host_list = {'active_hosts': [], 'dead_hosts': []}
+        # Connect to OSSEC server, get a list of all agents.
+        hostnames = []
+        auth_user = user
+        c_string = auth_user + '@' + ossec_server
+        if validate_hn(ossec_server):
+            hosts = run(
+                ['/usr/bin/ssh', c_string, 'sudo',
+                 '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
+                stdout=PIPE).stdout.split('\n')
+        for host in hosts:
+            ossec_id = host.split(',')[0]
+            host_data = run(
+                ['/usr/bin/ssh', ossec_server, 'sudo',
+                 '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
+                encoding='ascii', stdout=PIPE).stdout.split(',')
+            if len(host_data[1]) > 0 and validate_hn(host_data[1]):
+                hd_name = host_data[1]
+                hd_os_string = host_data[4]
+            if self.os == 'Linux':
+                if not match(r'^AIX', hd_os_string):
+                    hostnames.append(hd_name)
+            elif self.os == 'AIX':
+                if match(r'^AIX', hd_os_string):
+                    hostnames.append(hd_name)
+        for hostname in hostnames:
+            try:
+                # Testing DNS resolution and the ability to connect to TCP
+                # 22 on remote host.  If these checks fail, add the host
+                # to the list of hosts that do not respond.
+                host_ip = gethostbyname(hostname)
+                s = socket(AF_INET, SOCK_STREAM)
+                s.settimeout(5)
+                s.connect((host_ip, 22))
+                s.send(b'\n\n')
+                data = s.recv(4096)
+            except gaierror:
+                self.host_list['dead_hosts'].append(hostname)
+                continue
+            except timeout:
+                self.host_list['dead_hosts'].append(hostname)
+                continue
+            except ConnectionRefusedError:
+                self.host_list['dead_hosts'].append(hostname)
+                continue
+            except OSError:
+                self.host_list['dead_hosts'].append(hostname)
+                continue
+            if data is not None and len(str(data)) > 0:
+                self.host_list['active_hosts'].append(hostname)
+            s.close()
+        return self.host_list
 
-    Outputs:
-    data - dict(), Command execution output.
+    def get_admin_ex(self, known_admins, host_admins):
+        """Compares admin lists, returns list of exceptions.
 
-    Raises:
-    purge_error - Raised if the execution of userdel ends in a
-    non-zero status code.  The data variable is still returned."""
-    # Deleting users not in AD.
-    for user in orphans:
-        try:
-            purge = run([
-                '/usr/bin/ssh', host, 'sudo', '/usr/sbin/userdel',
-                user], stdout=PIPE, stderr=PIPE)
-            data = {'r_code': 0, 'output': purge.stdout}
-            return data
-        except CalledProcessError as purge_error:
-            data = {'r_code': purge_error.returncode,
-                    'error': purge_error.stderr}
-            return data
+        Keyword arguments:
+        known_admins - list(), dict() objects containing known admins.
+        admin_list - list(), The list of admins to audit.
 
-
-def getAdminEx(kg_admin_fn, admin_list):
-    """Compares admin lists, returns list of exceptions.
-
-    Keyword arguments:
-    kg_admin_fn - file(), File name for the file containing known good
-    admins.
-    admin_list - list(), The list of admins to audit.
-
-    Outputs:
-    admin_ex - list(), A list of admin exceptions (e.g., acounts that
-    have admin access but are not on the approved list)."""
-    admin_ex = []
-    # audit_findinddg = []
-    kg_admin_file = open(kg_admin_fn, 'r', encoding='ascii')
-    kg_admins = [kg_admin.strip('\n') for kg_admin in kg_admin_file]
-    kg_admin_file.close()
-    for kg_admin in kg_admins:
-        for admins in admin_list:
-            tested_group = kg_admin.split(':')[0]
-            if tested_group in admins:
-                audit_finding = {tested_group: []}
-                known_admins = kg_admin.split(':')[1]
-                for admin in admins.get(tested_group):
-                    if admin not in known_admins:
-                        audit_finding[tested_group].append(admin)
-                admin_ex.append(audit_finding)
-    return admin_ex
+        Outputs:
+        admin_ex - list(), A list of admin exceptions (e.g., acounts that
+        have admin access but are not on the approved list)."""
+        # audit_finding = []
+        # kg_admin_file = open(kg_admin_fn, 'r', encoding='ascii')
+        # kg_admins = [kg_admin.strip('\n') for kg_admin in kg_admin_file]
+        # kg_admin_file.close()
+        for known_admin in known_admins:
+            for admins in host_admins:
+                tested_group = known_admin.split(':')[0]
+                if tested_group in admins:
+                    audit_finding = {tested_group: []}
+                    known_admins = known_admin.split(':')[1]
+                    for admin in admins.get(tested_group):
+                        if admin not in known_admins:
+                            audit_finding[tested_group].append(admin)
+                    self.admin_ex.append(audit_finding)
+        return self.admin_ex
