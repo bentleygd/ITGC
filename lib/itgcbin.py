@@ -27,7 +27,10 @@ class ITGCAudit:
 
         Methods:
         get_ad_users - Connects to ossec server, returns a list of AD
-        users."""
+        users.
+        get_audit_ex - Compares local users to AUD, returns users not
+        in AD.
+        """
         self.host_list = {}
         self.known_admins = []
         self.host_admins = []
@@ -60,6 +63,24 @@ class ITGCAudit:
             if validate_un(username):
                 self.ad_users.append(username)
         return self.ad_users
+
+    def get_audit_ex(self, local_users, ad_users, exclusions):
+        """Compares user lists, returns list of users not in AD.
+
+        Keyword arguments:
+        local_users - list(), Local users on a system.
+        ad_users - list(), Users in active directory
+        exclusions - list(), Users to exclude from the audit.
+
+        Outputs:
+        audit_ex = list(), Users that are on the local system that do
+        not have a corresponding AD account."""
+        audit_ex = []
+        # Performing list comparison, returning users not in AD.
+        for user in local_users:
+            if user not in ad_users and user not in exclusions:
+                audit_ex.append(user)
+        return audit_ex
 
 
 class OracleDBAudit(ITGCAudit):
@@ -198,6 +219,25 @@ class OracleDBAudit(ITGCAudit):
         db_connection.close()
         return self.db_granted_roles
 
+    def get_admin_ex(self, known_admins, db_admins):
+        """Compares two lists, returns a list of exceptions.
+
+        Keyword arguments:
+        known_admins - list(), Known admins who are approved to have
+        admin level privileges.
+        db_admins - list(), Admins from an audited database.
+
+        Outputs:
+        admin_ex - list(), Users who are not approved to have admin
+        access."""
+        # Iterating over admin users from host, comparing them to
+        # known good, returing any exceptions as a list.
+        admin_ex = []
+        for user in db_admins:
+            if user not in known_admins:
+                admin_ex.append(user)
+        return admin_ex
+
 
 class UnixHostAudit(ITGCAudit):
     def __init__(self, os):
@@ -222,8 +262,6 @@ class UnixHostAudit(ITGCAudit):
         """
         ITGCAudit.__init__(self)
         self.os = os
-        self.local_users = []
-        self.audited_groups = []
 
     def get_users(self, host):
         """Connect to host, get users, return list of users.
@@ -237,6 +275,7 @@ class UnixHostAudit(ITGCAudit):
                     r'|/sbin/shutdown$|/usr/sbin/nologin$')
         # Connect to remote system, get a list of all user accounts that
         # have an interactive shell.
+        local_users = []
         file_contents = run(
             ['/usr/bin/ssh', '-oStrictHostKeyChecking=no', host, 'cat',
              '/etc/passwd'], encoding='ascii', stdout=PIPE
@@ -245,8 +284,8 @@ class UnixHostAudit(ITGCAudit):
             shell = line.split(':')[len(line.split(':')) - 1]
             username = line.split(':')[0]
             if not match(no_shell, shell) and validate_un(username):
-                self.local_users.append(line.split(':')[0])
-        return self.local_users
+                local_users.append(line.split(':')[0])
+        return local_users
 
     def get_groups(self, host, monitored_groups):
         """Connect to host, get all groups, return monitored groups.
@@ -256,8 +295,9 @@ class UnixHostAudit(ITGCAudit):
         monitored_groups - list(), The list of admin groups to monitor.
 
         Outputs:
-        monitored_groups - list(), The groups to check."""
+        audited_groups - list(), The groups to check."""
         m_group_list = []
+        audited_groups = []
         # Obtaining members of monitored groups from a remote host.
         host_groups = run(
             ['/usr/bin/ssh', host, 'cat', '/etc/group'],
@@ -273,10 +313,10 @@ class UnixHostAudit(ITGCAudit):
         # Returning monitored groups and their members as a list of
         # dictionaries.
         for m_group in m_group_list:
-            self.audited_groups.append(
+            audited_groups.append(
                 {m_group.split(':')[0]: m_group.split(':')[3].split(',')}
             )
-        return self.audited_groups
+        return audited_groups
 
     def get_hosts(self, user, ossec_server):
         """Returns a list of all Linux servers connected to an OSSEC
@@ -351,65 +391,25 @@ class UnixHostAudit(ITGCAudit):
             s.close()
         return self.host_list
 
+    def get_admin_ex(self, known_admins, host_admins):
+        """Compares admin lists, returns list of exceptions.
 
-def get_audit_ex(local_users, ad_users, exclusions):
-    """Compares user lists, returns list of users not in AD.
+        Keyword arguments:
+        known_admins - list(), dict() objects containing known admins.
+        admin_list - list(), The list of admins to audit.
 
-    Keyword arguments:
-    local_users - list(), Local users on a system.
-    ad_users - list(), Users in active directory
-    exclusions - list(), Users to exclude from the audit.
-
-    Outputs:
-    audit_ex = list(), Users that are on the local system that do
-    not have a corresponding AD account."""
-    audit_ex = []
-    # Performing list comparison, returning users not in AD.
-    for user in local_users:
-        if user not in ad_users and user not in exclusions:
-            audit_ex.append(user)
-    return audit_ex
-
-
-def get_nix_admin_ex(known_admins, host_admins):
-    """Compares admin lists, returns list of exceptions.
-
-    Keyword arguments:
-    known_admins - list(), dict() objects containing known admins.
-    admin_list - list(), The list of admins to audit.
-
-    Outputs:
-    admin_ex - list(), A list of admin exceptions (e.g., accounts
-    that have admin access but are not on the approved list)."""
-    admin_ex = []
-    for known_admin in known_admins:
-        for admins in host_admins:
-            tested_group = known_admin.split(':')[0]
-            if tested_group in admins:
-                audit_finding = {tested_group: []}
-                known_admins = known_admin.split(':')[1]
-                for admin in admins.get(tested_group):
-                    if admin not in known_admins:
-                        audit_finding[tested_group].append(admin)
-                admin_ex.append(audit_finding)
-    return admin_ex
-
-
-def get_db_admin_ex(known_admins, db_admins):
-    """Compares two lists, returns a list of exceptions.
-
-    Keyword arguments:
-    known_admins - list(), Known admins who are approved to have
-    admin level privileges.
-    db_admins - list(), Admins from an audited database.
-
-    Outputs:
-    admin_ex - list(), Users who are not approved to have admin
-    access."""
-    # Iterating over admin users from host, comparing them to
-    # known good, returing any exceptions as a list.
-    admin_ex = []
-    for user in db_admins:
-        if user not in known_admins:
-            admin_ex.append(user)
-    return admin_ex
+        Outputs:
+        admin_ex - list(), A list of admin exceptions (e.g., accounts
+        that have admin access but are not on the approved list)."""
+        admin_ex = []
+        for known_admin in known_admins:
+            for admins in host_admins:
+                tested_group = known_admin.split(':')[0]
+                if tested_group in admins:
+                    audit_finding = {tested_group: []}
+                    known_admins = known_admin.split(':')[1]
+                    for admin in admins.get(tested_group):
+                        if admin not in known_admins:
+                            audit_finding[tested_group].append(admin)
+                    admin_ex.append(audit_finding)
+        return admin_ex

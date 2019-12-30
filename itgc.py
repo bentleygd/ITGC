@@ -53,10 +53,10 @@ def main():
             if len(users) < 1:
                 orphans = ['Unable to retrieve users.']
             else:
-                orphans = str(itgcbin.get_audit_ex(
+                orphans = str(LinuxAudit.get_audit_ex(
                     users, ad_users, exclusions
                     ))
-            bad_admins = itgcbin.get_nix_admin_ex(
+            bad_admins = LinuxAudit.get_admin_ex(
                 known_admins, admin_groups
             )
             results.writerow(
@@ -127,10 +127,10 @@ def main():
             if len(users) < 1:
                 orphans = ['Unable to retrieve users.']
             else:
-                orphans = str(itgcbin.get_audit_ex(
+                orphans = str(AIXAudit.get_audit_ex(
                     users, ad_users, exclusions
                     ))
-            bad_admins = itgcbin.get_nix_admin_ex(
+            bad_admins = AIXAudit.get_admin_ex(
                 known_admins, admin_groups
             )
             results.writerow(
