@@ -19,21 +19,14 @@ class ITGCAudit:
         Instance variables:
         host_list - list(), The list of hosts that is audited by the
         object.
-        known_admins - list(), The list of of known good admins.
-        admin_list - list(), The list of admins from an AuditedSystem.
-        admin_ex - list(), Users with unapproved admin privileges.
-        audit_ex - list(), Users with accounts that are active past
-        date of termination.
+        ad_users - list(), Users in AD.
 
         Methods:
         get_ad_users - Connects to ossec server, returns a list of AD
         users.
         get_audit_ex - Compares local users to AUD, returns users not
-        in AD.
-        """
+        in AD."""
         self.host_list = {}
-        self.known_admins = []
-        self.host_admins = []
         self.ad_users = []
 
     def get_ad_users(self, user, ossec_server):
@@ -93,8 +86,6 @@ class OracleDBAudit(ITGCAudit):
         Instance variables:
         db_user - str(), The user used to authenticate to the Oracle
         DB and perform the audit.
-        db_user_list - list(), All users on the Oracle DB.
-        db_granted_roles - list(), The granted roles on the DB.
 
         Methods:
         get_db_users - Retrieves all users from the dba_user table.
@@ -105,10 +96,9 @@ class OracleDBAudit(ITGCAudit):
         # Calling the parent's init to include parent's instance
         # variables.
         ITGCAudit.__init__(self)
-        self.db_user_list = []
-        self.db_granted_roles = []
+        self.db_user = str()
 
-    def get_db_list(self, tns_file, db_user, db_pwd):
+    def get_db_list(self, tns_file, db_pwd):
         """Parses a tnsnames.ora file, returns DB host info.
 
         Keyword Arguments:
@@ -130,7 +120,7 @@ class OracleDBAudit(ITGCAudit):
         for db_name in db_names:
             # Connecting to the DB.
             try:
-                db_connection = connect(db_user, db_pwd, db_name)
+                db_connection = connect(self.db_user, db_pwd, db_name)
                 # Populating host lists.
                 if db_connection:
                     self.host_list['active_hosts'].append(db_name)
@@ -140,7 +130,7 @@ class OracleDBAudit(ITGCAudit):
             db_connection.close()
         return self.host_list
 
-    def get_db_users(self, db_user, pwd, db_host):
+    def get_db_users(self, pwd, db_host):
         """Connects to the database, returns a list of users.
 
         Keyword Arguments:
@@ -155,10 +145,10 @@ class OracleDBAudit(ITGCAudit):
         Raises:
         con_error - Unable to connect to the database.  Prints error
         message and exits with a status code of 1."""
-        self.db_users = []
+        db_users = []
         try:
             # Connecting to DB
-            db_connection = connect(db_user, pwd, db_host)
+            db_connection = connect(self.db_user, pwd, db_host)
         except Error as con_error:
             conError, = con_error.args
             print('Unable to connect to DB. The error is:', conError.message)
@@ -173,12 +163,12 @@ class OracleDBAudit(ITGCAudit):
         # them to a list.
         for row in db_cursor:
             user_data = {'username': row[0], 'profile': row[1]}
-            self.db_user_list.append(user_data)
+            db_users.append(user_data)
         # Closing the DB connection.
         db_connection.close()
-        return self.db_user_list
+        return db_users
 
-    def get_db_granted_roles(self, db_user, pwd, db_host):
+    def get_db_granted_roles(self, pwd, db_host):
         """Connects to the database, returns a list of users.
 
         Keyword Arguments:
@@ -193,10 +183,10 @@ class OracleDBAudit(ITGCAudit):
         Raises:
         con_error - Unable to connect to the database.  Prints error
         message and exits with a status code of 1."""
-        self.db_granted_roles = []
+        db_granted_roles = []
         # Connecting to DB
         try:
-            db_connection = connect(db_user, pwd, db_host)
+            db_connection = connect(self.db_user, pwd, db_host)
         except Error as con_error:
             conError, = con_error.args
             print('Unable to connect to DB. The error is:', conError.message)
@@ -214,10 +204,10 @@ class OracleDBAudit(ITGCAudit):
                 'username': row[0], 'granted_role': row[1],
                 'admin_option': row[2], 'default_role': row[3]
                 }
-            self.db_granted_roles.append(user_data)
+            db_granted_roles.append(user_data)
         # Closing the DB connection.
         db_connection.close()
-        return self.db_granted_roles
+        return db_granted_roles
 
     def get_admin_ex(self, known_admins, db_admins):
         """Compares two lists, returns a list of exceptions.
@@ -248,9 +238,6 @@ class UnixHostAudit(ITGCAudit):
 
         Instance variables:
         os - The opertating sytem that is going to be audited.
-        local_users - The local users of the host that is audited.
-        audited_groups - The groups that are being audited as part of
-        the audit.
 
         Methods:
         get_users - Connects to host and generates a list of local
@@ -259,7 +246,8 @@ class UnixHostAudit(ITGCAudit):
         in specific groups.
         get_hosts - Connect to the OSSEC server and gather a list of
         audited hosts based on OS (AIX or Linux).
-        """
+        get_admin_ex - Connects to host and compares local admins
+        against a list of known admins.  Returns the difference."""
         ITGCAudit.__init__(self)
         self.os = os
 
@@ -270,7 +258,7 @@ class UnixHostAudit(ITGCAudit):
         host - str(), hostname of remote system.
 
         Outputs:
-        self.local_users - list(), users with a valid shell."""
+        local_users - list(), users with a valid shell."""
         no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
                     r'|/sbin/shutdown$|/usr/sbin/nologin$')
         # Connect to remote system, get a list of all user accounts that
