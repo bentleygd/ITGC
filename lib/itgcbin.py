@@ -92,29 +92,35 @@ class OracleDBAudit(ITGCAudit):
         get_db_granted_roles - Retrieves all granted roles from the
         dba_role_privs table.
         get_db_list - Generates a list of reachable and unreachable
-        DBs."""
+        DBs.
+        get_admin_ex - Generates a list of unauthorized users with DBA
+        priviledges.
+        get_bad_profiles - Generates a list of human users with the
+        schema profile and a list of users with the default profile.
+        """
         # Calling the parent's init to include parent's instance
         # variables.
         ITGCAudit.__init__(self)
         self.db_user = str()
 
-    def get_db_list(self, tns_file, db_pwd):
+    def get_db_list(self, _file, db_pwd):
         """Parses a tnsnames.ora file, returns DB host info.
 
         Keyword Arguments:
-        tns_file - The tnsnames.ora file.
+        tns_file - str(), The location of the tnsnames.ora file.
+        db_pwd - str(), The password to log in to the DB.
 
         Outputs:
         host_lost - Dict(), a dictionary containing reachable and
         unreachable DBs."""
         # Variable initialization.
         db_names = []
-        self.host_list = {'active_hosts': [], 'dead_hosts': []}
+        self.host_list = {'active_dbs': [], 'dead_dbs': []}
         # Parsing through tnsnames.ora to make a list of DBs to
         # connect to.
-        tns_file = open(tns_file, 'r', encoding='ascii')
+        tns_file = open(_file, 'r', encoding='ascii')
         for line in tns_file:
-            db_parse = search(r'(^/S{4,12}) =', line)
+            db_parse = search(r'(^\S{4,12}) =', line)
             if db_parse:
                 db_names.append(db_parse.group(1))
         for db_name in db_names:
@@ -123,18 +129,17 @@ class OracleDBAudit(ITGCAudit):
                 db_connection = connect(self.db_user, db_pwd, db_name)
                 # Populating host lists.
                 if db_connection:
-                    self.host_list['active_hosts'].append(db_name)
+                    self.host_list['active_dbs'].append(db_name)
+                    db_connection.close()
             except Error:
-                self.host_list['dead_hosts'].append(db_name)
+                self.host_list['dead_dbs'].append(db_name)
             # Closing the DB connection.
-            db_connection.close()
         return self.host_list
 
     def get_db_users(self, pwd, db_host):
         """Connects to the database, returns a list of users.
 
         Keyword Arguments:
-        self.db_user - str(), The database user to connect as.
         pwd - str(), The user's password.
         db_host - str(), The DB SID.
 
@@ -227,6 +232,26 @@ class OracleDBAudit(ITGCAudit):
             if user not in known_admins:
                 admin_ex.append(user)
         return admin_ex
+
+    def get_bad_profiles(self, db_users):
+        """Compares AD users to uses with schema prof and enumerates
+        users that have the default profile.
+
+        Keyword arguments:
+        db_users - list(), A list of db_users and profiles.
+
+        Outputs:
+        bad_profiles - dict (), A list of human users with the schema
+        profile and a list of all users with the default profile."""
+        bad_profiles = {'schema_prof': [], 'default_prof': []}
+        for user in db_users:
+            if (user['username'] in self.ad_users and
+                    user['profile'] == 'SCHEMA_PROF'):
+                bad_profiles['schema_prof'].append(user['username'])
+        for user in db_users:
+            if user['profile'] == 'DEFAULT':
+                bad_profiles['default_prof'].append(user['username'])
+        return bad_profiles
 
 
 class UnixHostAudit(ITGCAudit):

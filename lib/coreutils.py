@@ -2,6 +2,8 @@
 from socket import gethostbyname, gaierror
 from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
+from requests import post
+from pyotp import TOTP
 
 
 def mail_send(mail_sender, mail_recipients, subject, mail_server, mail_body):
@@ -40,3 +42,24 @@ def mail_send(mail_sender, mail_recipients, subject, mail_server, mail_body):
         exit(1)
     # Sending the mail.
     s.sendmail(mail_sender, mail_recipients, msg.as_string())
+
+
+def get_credentials(scss_dict):
+    """Makes an API call to SCSS, returns credentials."""
+    api_key = scss_dict['api_key']
+    otp = TOTP(scss_dict['otp']).now()
+    userid = scss_dict['userid']
+    url = scss_dict['url']
+    user_agent = 'scss-client'
+    headers = {
+        'User-Agent': user_agent,
+        'api-key': api_key,
+        'totp': otp,
+        'userid': userid
+    }
+    scss_response = post(url, headers=headers, verify=False)
+    if scss_response.status_code == 200:
+        data = scss_response.json().get('gpg_pass')
+    else:
+        exit(1)
+    return data

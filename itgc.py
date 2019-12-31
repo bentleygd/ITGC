@@ -4,7 +4,7 @@ from time import time
 from argparse import ArgumentParser
 from configparser import ConfigParser
 
-from lib.coreutils import mail_send
+from lib.coreutils import mail_send, get_credentials
 from lib import itgcbin
 
 
@@ -95,7 +95,7 @@ def main():
             'Script execution time: %d seconds\n' % diff
         )
         # Emailing a report with the audit findings.
-        mail_send(sender, recipient, 'SOX Monthly Linux Security Review' +
+        mail_send(sender, recipient, 'SOX Monthly Linux Security Review ' +
                   'Report', smtp_server, msg_body)
         results_read.close()
 
@@ -172,6 +172,49 @@ def main():
         mail_send(sender, recipient, 'SOX Monthly AIX Security Review Report',
                   smtp_server, msg_body)
         results_read.close()
+
+    if args.os == 'Oracle':
+        # Setting up the results file.
+        results_write = open('audit_results.csv', 'w')
+        fields = ['db_name', 'dba_exceptions', 'orphans', 'bad_profiles']
+        results = DictWriter(results_write, fieldnames=fields)
+        results.writeheader()
+        # Object instantiation
+        db_audit = itgcbin.OracleDBAudit()
+        # Variable initialization
+        db_list = []
+        db_usernames = []
+        db_audit.db_user = config['oracle']['db_user']
+        scss_dict = {
+            'api_key': config['oracle']['scss_api'],
+            'otp': config['oracle']['scss_otp'],
+            'userid': config['oracle']['scss_user'],
+            'url': config['oracle']['scss_url']
+        }
+        tns_file = '/opt/oracle/instantclient_11_2/network/admin/tnsnames.ora'
+        db_pass = get_credentials(scss_dict)
+        db_hosts = db_audit.get_db_list(tns_file, db_pass)
+        ad_users = db_audit.get_ad_users(
+            config['ossec']['audit_user'], config['ossec']['ossec']
+        )
+        # Creating a list of DBs applicable to the environment.
+        if config['oracle']['environment'] == 'NPRD':
+            for host in db_hosts:
+                if host.endswith('QA') or host.endswith('DEV'):
+                    db_list.append(host)
+        elif config['oracle']['environment'] == 'PRD':
+            for host in db_hosts:
+                if not host.endswith('QA') or not host.endswith('DEV'):
+                    db_list.append(host)
+        for db in db_list:
+            user_info = db_audit.get_db_users(db_pass, db)
+            for entry in user_info:
+                if (entry['profile'] != 'SCHEMA_PROF' or
+                        entry['profile'] != 'DEFAULT'):
+                    db_usernames.append(entry['username'])
+            audit_ex = db_audit.get_audit_ex(
+                db_usernames, ad_users, config['oracle']['exclusions']
+            )
 
 
 if __name__ == '__main__':

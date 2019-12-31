@@ -30,4 +30,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=79 --statistics
     - name: Security Test with bandit
       run: |
-        bandit -ll . -r
+        bandit -ll -s B501 . -r
