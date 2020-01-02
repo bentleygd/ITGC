@@ -22,9 +22,14 @@ def main():
     # Setting mail configuration.
     config = ConfigParser()
     config.read('test.cnf')
-    sender = config['mail']['sender']
-    recipient = config['mail']['recipient']
-    smtp_server = config['mail']['server']
+    mail_info = {
+        'sender': str(), 'recipients': str(),
+        'subject': str(), 'server': str(),
+        'body': str()
+    }
+    mail_info['sender'] = config['mail']['sender']
+    mail_info['recipeints'] = config['mail']['recipient']
+    mail_info['server'] = config['mail']['server']
     # Getting audit info.
     ossec_server = config['main']['ossec']
     user = config['main']['audit_user']
@@ -94,9 +99,10 @@ def main():
         msg_body = msg_body + (
             'Script execution time: %d seconds\n' % diff
         )
+        mail_info['body'] = msg_body
+        mail_info['subject'] = 'SOX Monthly Linux Security Review Report'
         # Emailing a report with the audit findings.
-        mail_send(sender, recipient, 'SOX Monthly Linux Security Review ' +
-                  'Report', smtp_server, msg_body)
+        mail_send(mail_info)
         results_read.close()
 
     if args.os == 'AIX':
@@ -168,21 +174,24 @@ def main():
         msg_body = msg_body + (
             'Script execution time: %d seconds\n' % diff
         )
+        mail_info['body'] = msg_body
+        mail_info['subject'] = 'SOX Monthly AIX Security Review Report'
         # Emailing a report with the audit findings.
-        mail_send(sender, recipient, 'SOX Monthly AIX Security Review Report',
-                  smtp_server, msg_body)
+        mail_send(mail_info)
         results_read.close()
 
     if args.os == 'Oracle':
         # Setting up the results file.
         results_write = open('audit_results.csv', 'w')
-        fields = ['db_name', 'dba_exceptions', 'orphans', 'bad_profiles']
+        fields = ['db_name', 'dba_exceptions', 'orphans',
+                  'schema_prof', 'default_prof']
         results = DictWriter(results_write, fieldnames=fields)
         results.writeheader()
         # Object instantiation
         db_audit = itgcbin.OracleDBAudit()
         # Variable initialization
         db_list = []
+        unreachable_dbs = []
         db_usernames = []
         db_admins = []
         db_audit.db_user = config['oracle']['db_user']
@@ -195,19 +204,27 @@ def main():
         tns_file = '/opt/oracle/instantclient_11_2/network/admin/tnsnames.ora'
         db_pass = get_credentials(scss_dict)
         db_hosts = db_audit.get_db_list(tns_file, db_pass)
-        ad_users = db_audit.get_ad_users(
-            config['ossec']['audit_user'], config['ossec']['ossec']
-        )
+        ad_users = db_audit.get_ad_users(user, ossec_server)
         # Creating a list of DBs applicable to the environment.
         if config['oracle']['environment'] == 'NPRD':
-            for host in db_hosts:
+            for host in db_hosts['active_dbs']:
                 if 'QA' in host or 'DEV' in host:
                     db_list.append(host)
+            for dead_host in db_hosts['dead_dbs']:
+                if 'QA' in host or 'DEV' in host:
+                    unreachable_dbs.append(dead_host)
         elif config['oracle']['environment'] == 'PRD':
-            for host in db_hosts:
+            for host in db_hosts['active_dbs']:
                 if 'QA' not in host and 'DEV' not in host:
                     db_list.append(host)
+            for dead_host in db_hosts['dead_dbs']:
+                if 'QA' not in host or 'DEV' not in host:
+                    unreachable_dbs.append(dead_host)
+        alive_int = len(db_list)
+        dead_int = len(unreachable_dbs)
+        total_int = alive_int + dead_int
         # Running the audit.
+        start = time()
         for db in db_list:
             user_info = db_audit.get_db_users(db_pass, db)
             for entry in user_info:
@@ -228,13 +245,64 @@ def main():
             dba_exception = db_audit.get_admin_ex(
                 config['oracle']['known_admins'], db_admins
             )
+            # Writing to the results file.
             results.writerow(
                 {'db_name': db,
                  'dba_exceptions': dba_exception,
                  'orphans': audit_ex,
-                 'bad_profiles': bad_profiles}
+                 'schema_prof': bad_profiles['schema_prof'],
+                 'default_prof': bad_profiles['default_prof']}
             )
         results_write.close()
+        # Parsing the results of the audit.
+        results_read = open('audit_results.csv', 'r', newline='')
+        r_reader = DictReader(results_read)
+        msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
+            alive_int, total_int
+        )
+        for row in r_reader:
+            msg_body = msg_body + (
+                '*' * 64 + '\n' +
+                '%s results:\n' % row['db_name']
+            )
+            msg_body = msg_body + 'Accounts without AD account: '
+            for orphan in list(row['orphans']):
+                msg_body = msg_body + orphan
+            msg_body = msg_body + '\n'
+            msg_body = msg_body + 'Admin Exceptions: '
+            for exception in list(row['dba_exceptions']):
+                msg_body = msg_body + exception
+            msg_body = msg_body + '\n'
+            msg_body = msg_body + 'Users with Schema Profile: '
+            if len(list(row['schema_prof']) == 0):
+                msg_body = msg_body + 'None'
+            else:
+                for schema_ex in list(row['schema_prof']):
+                    msg_body = msg_body + schema_ex
+            msg_body = msg_body + '\n'
+            msg_body = msg_body + 'Users with Default Profile: '
+            if len(list(row['default_prof'] == 0)):
+                msg_body = msg_body + 'None'
+            else:
+                for default_ex in list(row['default_prof']):
+                    msg_body = msg_body + default_ex
+            msg_body = msg_body + '\n\n'
+        msg_body = msg_body + (
+            '*' * 64 + '\n' +
+            'Active DBs: %s\n' % (db_audit.host_list.get('active_dbs')) +
+            '*' * 64 + '\n' +
+            'Unreachlable DBs: %s\n' % (db_audit.host_list.get('dead_dbs'))
+        )
+        end = time()
+        diff = round(end - start, 2)
+        msg_body = msg_body + (
+            'Script execution time: %d seconds\n' % diff
+        )
+        mail_info['body'] = msg_body
+        mail_info['subject'] = 'SOX Monthly Oracle DB Security Review Report'
+        # Emailing a report with the audit findings.
+        mail_send(mail_info)
+        results_read.close()
 
 
 if __name__ == '__main__':

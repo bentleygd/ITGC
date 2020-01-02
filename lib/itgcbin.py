@@ -71,7 +71,8 @@ class ITGCAudit:
         audit_ex = []
         # Performing list comparison, returning users not in AD.
         for user in local_users:
-            if user not in ad_users and user not in exclusions:
+            if (user.lower() not in ad_users and
+                    user.lower() not in exclusions):
                 audit_ex.append(user)
         return audit_ex
 
@@ -229,7 +230,8 @@ class OracleDBAudit(ITGCAudit):
         # known good, returing any exceptions as a list.
         admin_ex = []
         for user in db_admins:
-            if user.lower() not in known_admins:
+            if (user.lower() not in known_admins and
+                    user.lower() not in admin_ex):
                 admin_ex.append(user)
         return admin_ex
 
@@ -245,7 +247,7 @@ class OracleDBAudit(ITGCAudit):
         profile and a list of all users with the default profile."""
         bad_profiles = {'schema_prof': [], 'default_prof': []}
         for user in db_users:
-            if (user['username'] in self.ad_users and
+            if (user['username'].lower() in self.ad_users and
                     user['profile'] == 'SCHEMA_PROF'):
                 bad_profiles['schema_prof'].append(user['username'])
         for user in db_users:
