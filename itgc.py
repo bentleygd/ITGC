@@ -274,18 +274,10 @@ def main():
                 msg_body = msg_body + exception
             msg_body = msg_body + '\n'
             msg_body = msg_body + 'Users with Schema Profile: '
-            if len(list(row['schema_prof']) == 0):
-                msg_body = msg_body + 'None'
-            else:
-                for schema_ex in list(row['schema_prof']):
-                    msg_body = msg_body + schema_ex
+            msg_body = msg_body + row['schema_prof']
             msg_body = msg_body + '\n'
             msg_body = msg_body + 'Users with Default Profile: '
-            if len(list(row['default_prof'] == 0)):
-                msg_body = msg_body + 'None'
-            else:
-                for default_ex in list(row['default_prof']):
-                    msg_body = msg_body + default_ex
+            msg_body = msg_body + row['default_prof']
             msg_body = msg_body + '\n\n'
         msg_body = msg_body + (
             '*' * 64 + '\n' +
