@@ -184,6 +184,7 @@ def main():
         # Variable initialization
         db_list = []
         db_usernames = []
+        db_admins = []
         db_audit.db_user = config['oracle']['db_user']
         scss_dict = {
             'api_key': config['oracle']['scss_api'],
@@ -200,21 +201,40 @@ def main():
         # Creating a list of DBs applicable to the environment.
         if config['oracle']['environment'] == 'NPRD':
             for host in db_hosts:
-                if host.endswith('QA') or host.endswith('DEV'):
+                if 'QA' in host or 'DEV' in host:
                     db_list.append(host)
         elif config['oracle']['environment'] == 'PRD':
             for host in db_hosts:
-                if not host.endswith('QA') or not host.endswith('DEV'):
+                if 'QA' not in host and 'DEV' not in host:
                     db_list.append(host)
+        # Running the audit.
         for db in db_list:
             user_info = db_audit.get_db_users(db_pass, db)
             for entry in user_info:
                 if (entry['profile'] != 'SCHEMA_PROF' or
                         entry['profile'] != 'DEFAULT'):
                     db_usernames.append(entry['username'])
+            # Checking for users past term.
             audit_ex = db_audit.get_audit_ex(
                 db_usernames, ad_users, config['oracle']['exclusions']
             )
+            # Checking for misconfigured profiles.
+            bad_profiles = db_audit.get_bad_profiles(user_info)
+            granted_roles = db_audit.get_db_granted_roles(db_pass, db)
+            for role in granted_roles:
+                if (role['granted_role'] == 'DBA'):
+                    db_admins.append(role['username'])
+            # Checking for DBA exceptions.
+            dba_exception = db_audit.get_admin_ex(
+                config['oracle']['known_admins'], db_admins
+            )
+            results.writerow(
+                {'db_name': db,
+                 'dba_exceptions': dba_exception,
+                 'orphans': audit_ex,
+                 'bad_profiles': bad_profiles}
+            )
+        results_write.close()
 
 
 if __name__ == '__main__':

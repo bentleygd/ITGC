@@ -229,12 +229,12 @@ class OracleDBAudit(ITGCAudit):
         # known good, returing any exceptions as a list.
         admin_ex = []
         for user in db_admins:
-            if user not in known_admins:
+            if user.lower() not in known_admins:
                 admin_ex.append(user)
         return admin_ex
 
     def get_bad_profiles(self, db_users):
-        """Compares AD users to uses with schema prof and enumerates
+        """Compares AD users to users with schema prof and enumerates
         users that have the default profile.
 
         Keyword arguments:
