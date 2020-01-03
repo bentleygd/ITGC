@@ -317,6 +317,8 @@ class UnixHostAudit(ITGCAudit):
         except SSHException:
             print('Unable to get local users. The error is:', err)
             exit(1)
+        except AuthenticationException:
+            local_users.append('Authentication_Failed')
         client.close()
         for line in out:
             line = line.strip('\n')
