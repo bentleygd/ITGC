@@ -314,11 +314,11 @@ class UnixHostAudit(ITGCAudit):
         client.connect(host)
         try:
             _in, out, err = client.exec_command('/bin/cat /etc/passwd')
+        except AuthenticationException:
+            local_users.append('Authentication_Failed')
         except SSHException:
             print('Unable to get local users. The error is:', err)
             exit(1)
-        except AuthenticationException:
-            local_users.append('Authentication_Failed')
         client.close()
         for line in out:
             line = line.strip('\n')
@@ -346,6 +346,8 @@ class UnixHostAudit(ITGCAudit):
         client.connect(host)
         try:
             _in, out, err = client.exec_command('/bin/cat /etc/group')
+        except AuthenticationException:
+            host_groups.append('Authentication_Failed')
         except SSHException:
             print('Unable to get groups. The error is:', err)
             exit(1)
