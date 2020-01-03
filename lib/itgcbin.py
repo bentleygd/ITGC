@@ -439,7 +439,8 @@ class UnixHostAudit(ITGCAudit):
                 # 22 on the remote host and initial authentication.
                 # If these checks fail, add the host to the list of
                 # hosts that do not respond.
-                client.connect(hostname, banner_timeout=5, auth_timeout=5)
+                if client.connect(hostname, banner_timeout=5, auth_timeout=5):
+                    self.host_list['active_hosts'].append(hostname)
             except BadHostKeyException:
                 self.host_list['dead_hosts'].append(hostname)
                 continue
@@ -454,8 +455,6 @@ class UnixHostAudit(ITGCAudit):
             except OSError:
                 self.host_list['dead_hosts'].append(hostname)
                 continue
-            if client.connect:
-                self.host_list['active_hosts'].append(hostname)
             client.close()
         return self.host_list
 
