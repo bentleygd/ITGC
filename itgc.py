@@ -190,8 +190,6 @@ def main():
         # Object instantiation
         db_audit = itgcbin.OracleDBAudit()
         # Variable initialization
-        db_list = []
-        unreachable_dbs = []
         db_usernames = []
         db_admins = []
         db_audit.db_user = config['oracle']['db_user']
@@ -202,30 +200,17 @@ def main():
             'url': config['oracle']['scss_url']
         }
         tns_file = '/opt/oracle/instantclient_11_2/network/admin/tnsnames.ora'
+        env = config['oracle']['environment']
         db_pass = get_credentials(scss_dict)
-        db_hosts = db_audit.get_db_list(tns_file, db_pass)
+        db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
         ad_users = db_audit.get_ad_users(user, ossec_server)
         # Creating a list of DBs applicable to the environment.
-        if config['oracle']['environment'] == 'NPRD':
-            for host in db_hosts['active_dbs']:
-                if 'QA' in host or 'DEV' in host:
-                    db_list.append(host)
-            for dead_host in db_hosts['dead_dbs']:
-                if 'QA' in host or 'DEV' in host:
-                    unreachable_dbs.append(dead_host)
-        elif config['oracle']['environment'] == 'PRD':
-            for host in db_hosts['active_dbs']:
-                if 'QA' not in host and 'DEV' not in host:
-                    db_list.append(host)
-            for dead_host in db_hosts['dead_dbs']:
-                if 'QA' not in host or 'DEV' not in host:
-                    unreachable_dbs.append(dead_host)
-        alive_int = len(db_list)
-        dead_int = len(unreachable_dbs)
+        alive_int = len(db_hosts['active_dbs'])
+        dead_int = len(db_hosts['dead_dbs'])
         total_int = alive_int + dead_int
         # Running the audit.
         start = time()
-        for db in db_list:
+        for db in db_hosts:
             user_info = db_audit.get_db_users(db_pass, db)
             for entry in user_info:
                 if (entry['profile'] != 'SCHEMA_PROF' or

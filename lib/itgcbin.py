@@ -11,7 +11,7 @@ from lib.validate import validate_un, validate_hn
 
 class ITGCAudit:
     def __init__(self):
-        """Creates an AuditedSystem object.
+        """Creates an Audited System object.
 
         Keyword arguments:
         None.
@@ -104,12 +104,14 @@ class OracleDBAudit(ITGCAudit):
         ITGCAudit.__init__(self)
         self.db_user = str()
 
-    def get_db_list(self, _file, db_pwd):
+    def get_db_list(self, _file, db_pwd, env):
         """Parses a tnsnames.ora file, returns DB host info.
 
         Keyword Arguments:
         tns_file - str(), The location of the tnsnames.ora file.
         db_pwd - str(), The password to log in to the DB.
+        env - str(), The environment to audit (i.e., production or
+        non-production).
 
         Outputs:
         host_lost - Dict(), a dictionary containing reachable and
@@ -123,7 +125,13 @@ class OracleDBAudit(ITGCAudit):
         for line in tns_file:
             db_parse = search(r'(^\S{4,12}) =', line)
             if db_parse:
-                db_names.append(db_parse.group(1))
+                dbname = db_parse.group(1)
+                if env == 'NPRD':
+                    if 'QA' in dbname or 'DEV' in dbname:
+                        db_names.append(dbname)
+                elif env == 'PRD':
+                    if 'QA' not in dbname and 'DEV' not in dbname:
+                        db_names.append(dbname)
         for db_name in db_names:
             # Connecting to the DB.
             try:
