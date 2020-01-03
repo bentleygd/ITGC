@@ -400,6 +400,9 @@ class UnixHostAudit(ITGCAudit):
             hosts.add(line.strip('\n'))
         for host in hosts:
             ossec_id = host.split(',')[0]
+            if not match(r'\d{4,6}', ossec_id):
+                print('Invalid OSSEC ID.  Aborting')
+                exit(1)
             try:
                 _in, out, err = ossec_client.exec_command(
                     '/bin/sudo /var/ossec/bin/agent_control -s -i ' + ossec_id
