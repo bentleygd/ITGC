@@ -4,7 +4,7 @@ from time import time
 from argparse import ArgumentParser
 from configparser import ConfigParser
 
-from lib.coreutils import mail_send, get_credentials
+from lib.coreutils import mail_send, get_credentials, connect_test
 from lib import itgcbin
 
 
@@ -120,8 +120,11 @@ def main():
         start = time()
         aix_host_list = AIXAudit.get_hosts(user, ossec_server)
         for aix_host in aix_known_hosts:
-            if aix_host not in aix_host_list['active_hosts']:
+            if (aix_host not in aix_host_list['active_hosts'] and
+                    connect_test(aix_host)):
                 aix_host_list['active_hosts'].append(aix_host)
+            else:
+                aix_host_list['dead_hosts'].append(aix_host)
         ad_users = AIXAudit.get_ad_users(user, ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))

@@ -4,6 +4,7 @@ from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
 
 from requests import post
+from paramiko import SSHClient
 from pyotp import TOTP
 
 
@@ -68,3 +69,19 @@ def get_credentials(scss_dict):
     else:
         exit(1)
     return data
+
+
+def connect_test(host):
+    """Returns true if connection is successful.
+
+    Keyword Arguments:
+    host - str(), the host's name.
+
+    Outputs.
+    Bool."""
+    client = SSHClient()
+    client.load_system_host_keys()
+    if client.connect(host):
+        return True
+    else:
+        return False
