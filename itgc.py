@@ -28,7 +28,7 @@ def main():
         'body': str()
     }
     mail_info['sender'] = config['mail']['sender']
-    mail_info['recipeints'] = config['mail']['recipient']
+    mail_info['recipients'] = config['mail']['recipient']
     mail_info['server'] = config['mail']['server']
     # Getting audit info.
     ossec_server = config['main']['ossec']
@@ -210,7 +210,7 @@ def main():
         total_int = alive_int + dead_int
         # Running the audit.
         start = time()
-        for db in db_hosts:
+        for db in db_hosts['active_dbs']:
             user_info = db_audit.get_db_users(db_pass, db)
             for entry in user_info:
                 if (entry['profile'] != 'SCHEMA_PROF' or
@@ -242,7 +242,7 @@ def main():
         # Parsing the results of the audit.
         results_read = open('audit_results.csv', 'r', newline='')
         r_reader = DictReader(results_read)
-        msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
+        msg_body = '%d hosts were successfully audited out of %d hosts\n\n' % (
             alive_int, total_int
         )
         for row in r_reader:
@@ -258,7 +258,7 @@ def main():
             for exception in list(row['dba_exceptions']):
                 msg_body = msg_body + exception
             msg_body = msg_body + '\n'
-            msg_body = msg_body + 'Users with Schema Profile: '
+            msg_body = msg_body + 'Human users with Schema Profile: '
             msg_body = msg_body + row['schema_prof']
             msg_body = msg_body + '\n'
             msg_body = msg_body + 'Users with Default Profile: '
@@ -268,12 +268,12 @@ def main():
             '*' * 64 + '\n' +
             'Active DBs: %s\n' % (db_audit.host_list.get('active_dbs')) +
             '*' * 64 + '\n' +
-            'Unreachlable DBs: %s\n' % (db_audit.host_list.get('dead_dbs'))
+            'Unreachable DBs: %s\n' % (db_audit.host_list.get('dead_dbs'))
         )
         end = time()
         diff = round(end - start, 2)
         msg_body = msg_body + (
-            'Script execution time: %d seconds\n' % diff
+            'Audit execution time: %d seconds\n' % diff
         )
         mail_info['body'] = msg_body
         mail_info['subject'] = 'SOX Monthly Oracle DB Security Review Report'

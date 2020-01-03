@@ -1,10 +1,10 @@
 #!/usr/bin/python3
-from subprocess import run, PIPE
 from re import match, search
-from socket import gethostbyname, socket, AF_INET, SOCK_STREAM
-from socket import gaierror, timeout
 
 from cx_Oracle import connect, Error
+from paramiko import SSHClient, AutoAddPolicy
+from paramiko import (SSHException, BadHostKeyException,
+                      AuthenticationException)
 
 from lib.validate import validate_un, validate_hn
 
@@ -41,12 +41,20 @@ class ITGCAudit:
         ad_user_list - list(), Users in Active Directory."""
         # Getting AD users from a file on the OSSEC server.
         auth_user = user
-        c_string = auth_user + '@' + ossec_server
+        client = SSHClient()
         if validate_hn(ossec_server):
-            ad_users = run(
-                ['/usr/bin/ssh', c_string, 'sudo', 'cat',
-                 '/var/ossec/lists/ad_users'], encoding='ascii', stdout=PIPE
-                 ).stdout.strip('\n').split('\n')
+            client.connect(ossec_server, username=auth_user)
+            try:
+                _in, out, err = client.exec_command(
+                    '/bin/sudo /bin/cat /var/ossec/lists/ad_users'
+                )
+            except SSHException:
+                print('Unable to retrieve AD users.  The error is:', err)
+                exit(1)
+            client.close()
+            ad_users = []
+            for line in out:
+                ad_users.append(line.strip('\n'))
         else:
             print('Invalid ossec server name.')
             exit(1)
@@ -132,16 +140,16 @@ class OracleDBAudit(ITGCAudit):
                 elif env == 'PRD':
                     if 'QA' not in dbname and 'DEV' not in dbname:
                         db_names.append(dbname)
-        for db_name in db_names:
+        for _db_name in db_names:
             # Connecting to the DB.
             try:
-                db_connection = connect(self.db_user, db_pwd, db_name)
+                db_connection = connect(self.db_user, db_pwd, _db_name)
                 # Populating host lists.
                 if db_connection:
-                    self.host_list['active_dbs'].append(db_name)
+                    self.host_list['active_dbs'].append(_db_name)
                     db_connection.close()
             except Error:
-                self.host_list['dead_dbs'].append(db_name)
+                self.host_list['dead_dbs'].append(_db_name)
             # Closing the DB connection.
         return self.host_list
 
@@ -165,7 +173,8 @@ class OracleDBAudit(ITGCAudit):
             db_connection = connect(self.db_user, pwd, db_host)
         except Error as con_error:
             conError, = con_error.args
-            print('Unable to connect to DB. The error is:', conError.message)
+            print('Unable to connect to', db_host + '\nThe error is:',
+                  conError.message)
             exit(1)
         db_cursor = db_connection.cursor()
         # Executing query
@@ -237,7 +246,7 @@ class OracleDBAudit(ITGCAudit):
         # Iterating over admin users from host, comparing them to
         # known good, returing any exceptions as a list.
         admin_ex = []
-        for user in db_admins:
+        for user in set(db_admins):
             if (user.lower() not in known_admins and
                     user.lower() not in admin_ex):
                 admin_ex.append(user)
@@ -259,7 +268,7 @@ class OracleDBAudit(ITGCAudit):
                     user['profile'] == 'SCHEMA_PROF'):
                 bad_profiles['schema_prof'].append(user['username'])
         for user in db_users:
-            if user['profile'] == 'DEFAULT':
+            if user['profile'] == 'DEFAULT' and user['username'] != 'XS$NULL':
                 bad_profiles['default_prof'].append(user['username'])
         return bad_profiles
 
@@ -299,11 +308,16 @@ class UnixHostAudit(ITGCAudit):
         # Connect to remote system, get a list of all user accounts that
         # have an interactive shell.
         local_users = []
-        file_contents = run(
-            ['/usr/bin/ssh', '-oStrictHostKeyChecking=no', host, 'cat',
-             '/etc/passwd'], encoding='ascii', stdout=PIPE
-             ).stdout.strip('\n').split('\n')
-        for line in file_contents:
+        client = SSHClient()
+        client.connect(host)
+        try:
+            _in, out, err = client.exec_command('/bin/cat /etc/passwd')
+        except SSHException:
+            print('Unable to get local users. The error is:', err)
+            exit(1)
+        client.close()
+        for line in out:
+            line = line.strip('\n')
             shell = line.split(':')[len(line.split(':')) - 1]
             username = line.split(':')[0]
             if not match(no_shell, shell) and validate_un(username):
@@ -322,10 +336,17 @@ class UnixHostAudit(ITGCAudit):
         m_group_list = []
         audited_groups = []
         # Obtaining members of monitored groups from a remote host.
-        host_groups = run(
-            ['/usr/bin/ssh', host, 'cat', '/etc/group'],
-            encoding='ascii', stdout=PIPE
-            ).stdout.strip('\n').split('\n')
+        host_groups = []
+        client = SSHClient()
+        client.connect(host)
+        try:
+            _in, out, err = client.exec_command('/bin/cat /etc/group')
+        except SSHException:
+            print('Unable to get groups. The error is:', err)
+            exit(1)
+        client.close()
+        for line in out:
+            host_groups.append(line.strip('\n'))
         for group in monitored_groups:
             r_exp = r'^' + str(group) + r'.+\d{4,6}:'
             for host_group in host_groups:
@@ -365,18 +386,29 @@ class UnixHostAudit(ITGCAudit):
         # Connect to OSSEC server, get a list of all agents.
         hostnames = []
         auth_user = user
-        c_string = auth_user + '@' + ossec_server
+        ossec_client = SSHClient()
         if validate_hn(ossec_server):
-            hosts = run(
-                ['/usr/bin/ssh', c_string, 'sudo',
-                 '/var/ossec/bin/agent_control', '-ls'], encoding='ascii',
-                stdout=PIPE).stdout.split('\n')
+            ossec_client.connect(ossec_server, username=auth_user)
+            try:
+                _in, out, err = ossec_client.exec_command(
+                    '/bin/sudo /var/ossec/bin/agent/control -ls'
+                )
+            except SSHException:
+                print('Unable to retrieve host list. The error is:', err)
+        hosts = set()
+        for line in out:
+            hosts.add(line.strip('\n'))
         for host in hosts:
             ossec_id = host.split(',')[0]
-            host_data = run(
-                ['/usr/bin/ssh', ossec_server, 'sudo',
-                 '/var/ossec/bin/agent_control', '-s', '-i', ossec_id],
-                encoding='ascii', stdout=PIPE).stdout.split(',')
+            try:
+                _in, out, err = ossec_client.exec_command(
+                    '/bin/sudo /var/ossec/bin/agent_control -s -i ' + ossec_id
+                )
+            except SSHException:
+                print('Unable to retrieve host info. The error is:', err)
+            host_data = []
+            for line in out:
+                host_data.append(line.strip('\n'))
             if len(host_data[1]) > 0 and validate_hn(host_data[1]):
                 hd_name = host_data[1]
                 hd_os_string = host_data[4]
@@ -386,32 +418,33 @@ class UnixHostAudit(ITGCAudit):
             elif self.os == 'AIX':
                 if match(r'^AIX', hd_os_string):
                     hostnames.append(hd_name)
+        ossec_client.close()
+        client = SSHClient()
+        client.set_missing_host_key_policy(AutoAddPolicy)
         for hostname in hostnames:
             try:
-                # Testing DNS resolution and the ability to connect to TCP
-                # 22 on remote host.  If these checks fail, add the host
-                # to the list of hosts that do not respond.
-                host_ip = gethostbyname(hostname)
-                s = socket(AF_INET, SOCK_STREAM)
-                s.settimeout(5)
-                s.connect((host_ip, 22))
-                s.send(b'\n\n')
-                data = s.recv(4096)
-            except gaierror:
+                # Testing DNS resolution, the ability to connect to TCP
+                # 22 on the remote host and initial authentication.
+                # If these checks fail, add the host to the list of
+                # hosts that do not respond.
+                client.connect(hostname, banner_timeout=5, auth_timeout=5)
+            except BadHostKeyException:
                 self.host_list['dead_hosts'].append(hostname)
                 continue
-            except timeout:
+            except AuthenticationException:
                 self.host_list['dead_hosts'].append(hostname)
                 continue
+            except SSHException:
+                self.host_list['dead_hosts'].append(hostname)
             except ConnectionRefusedError:
                 self.host_list['dead_hosts'].append(hostname)
                 continue
             except OSError:
                 self.host_list['dead_hosts'].append(hostname)
                 continue
-            if data is not None and len(str(data)) > 0:
+            if client.connect:
                 self.host_list['active_hosts'].append(hostname)
-            s.close()
+            client.close()
         return self.host_list
 
     def get_admin_ex(self, known_admins, host_admins):
