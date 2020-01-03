@@ -4,7 +4,7 @@ from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
 
 from requests import post
-from paramiko import SSHClient
+from paramiko import SSHClient, AuthenticationException
 from pyotp import TOTP
 
 
@@ -81,7 +81,10 @@ def connect_test(host):
     Bool."""
     client = SSHClient()
     client.load_system_host_keys()
-    if client.connect(host):
-        return True
-    else:
+    try:
+        if client.connect(host):
+            return True
+        else:
+            return False
+    except AuthenticationException:
         return False
