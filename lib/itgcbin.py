@@ -311,21 +311,21 @@ class UnixHostAudit(ITGCAudit):
         local_users = []
         client = SSHClient()
         client.load_system_host_keys()
-        client.connect(host)
         try:
+            client.connect(host)
             _in, out, err = client.exec_command('/bin/cat /etc/passwd')
+            for line in out:
+                line = line.strip('\n')
+                shell = line.split(':')[len(line.split(':')) - 1]
+                username = line.split(':')[0]
+                if not match(no_shell, shell) and validate_un(username):
+                    local_users.append(line.split(':')[0])
         except AuthenticationException:
             local_users.append('Authentication_Failed')
         except SSHException:
             print('Unable to get local users. The error is:', err)
             exit(1)
         client.close()
-        for line in out:
-            line = line.strip('\n')
-            shell = line.split(':')[len(line.split(':')) - 1]
-            username = line.split(':')[0]
-            if not match(no_shell, shell) and validate_un(username):
-                local_users.append(line.split(':')[0])
         return local_users
 
     def get_groups(self, host, monitored_groups):
@@ -343,24 +343,24 @@ class UnixHostAudit(ITGCAudit):
         host_groups = []
         client = SSHClient()
         client.load_system_host_keys()
-        client.connect(host)
         try:
+            client.connect(host)
             _in, out, err = client.exec_command('/bin/cat /etc/group')
+            for line in out:
+                host_groups.append(line.strip('\n'))
+            for group in monitored_groups:
+                r_exp = r'^' + str(group) + r'.+\d{4,6}:'
+                for host_group in host_groups:
+                    if (search(r_exp, host_group) and
+                        host_group.split(':')[3] is not None and
+                            len(host_group.split(':')[3]) > 0):
+                        m_group_list.append(host_group)
         except AuthenticationException:
             host_groups.append('Authentication_Failed')
         except SSHException:
             print('Unable to get groups. The error is:', err)
             exit(1)
         client.close()
-        for line in out:
-            host_groups.append(line.strip('\n'))
-        for group in monitored_groups:
-            r_exp = r'^' + str(group) + r'.+\d{4,6}:'
-            for host_group in host_groups:
-                if (search(r_exp, host_group) and
-                    host_group.split(':')[3] is not None and
-                        len(host_group.split(':')[3]) > 0):
-                    m_group_list.append(host_group)
         # Returning monitored groups and their members as a list of
         # dictionaries.
         for m_group in m_group_list:
