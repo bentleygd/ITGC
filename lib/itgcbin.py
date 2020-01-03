@@ -42,6 +42,7 @@ class ITGCAudit:
         # Getting AD users from a file on the OSSEC server.
         auth_user = user
         client = SSHClient()
+        client.load_system_host_keys()
         if validate_hn(ossec_server):
             client.connect(ossec_server, username=auth_user)
             try:
@@ -309,6 +310,7 @@ class UnixHostAudit(ITGCAudit):
         # have an interactive shell.
         local_users = []
         client = SSHClient()
+        client.load_system_host_keys()
         client.connect(host)
         try:
             _in, out, err = client.exec_command('/bin/cat /etc/passwd')
@@ -338,6 +340,7 @@ class UnixHostAudit(ITGCAudit):
         # Obtaining members of monitored groups from a remote host.
         host_groups = []
         client = SSHClient()
+        client.load_system_host_keys()
         client.connect(host)
         try:
             _in, out, err = client.exec_command('/bin/cat /etc/group')
@@ -387,6 +390,7 @@ class UnixHostAudit(ITGCAudit):
         hostnames = []
         auth_user = user
         ossec_client = SSHClient()
+        ossec_client.load_system_host_keys()
         if validate_hn(ossec_server):
             ossec_client.connect(ossec_server, username=auth_user)
             try:
@@ -423,6 +427,7 @@ class UnixHostAudit(ITGCAudit):
                     hostnames.append(hd_name)
         ossec_client.close()
         client = SSHClient()
+        client.load_system_host_keys()
         client.set_missing_host_key_policy(AutoAddPolicy)
         for hostname in hostnames:
             try:
