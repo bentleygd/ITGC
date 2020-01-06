@@ -32,7 +32,6 @@ def main():
     mail_info['server'] = config['mail']['server']
     # Getting audit info.
     ossec_server = config['main']['ossec']
-    user = config['main']['audit_user']
 
     if args.os == 'Linux':
         LinuxAudit = itgcbin.UnixHostAudit('Linux')
@@ -46,8 +45,8 @@ def main():
         for admin_group in admin_file:
             known_admins.append(admin_group)
         start = time()
-        linux_host_list = LinuxAudit.get_hosts(user, ossec_server)
-        ad_users = LinuxAudit.get_ad_users(user, ossec_server)
+        linux_host_list = LinuxAudit.get_hosts(ossec_server)
+        ad_users = LinuxAudit.get_ad_users(ossec_server)
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
@@ -118,14 +117,14 @@ def main():
             known_admins.append(admin_group)
         aix_known_hosts = config['aix']['known_hosts'].split(',')
         start = time()
-        aix_host_list = AIXAudit.get_hosts(user, ossec_server)
+        aix_host_list = AIXAudit.get_hosts(ossec_server)
         for aix_host in aix_known_hosts:
             if (aix_host not in aix_host_list['active_hosts'] and
                     ssh_test(aix_host)):
                 aix_host_list['active_hosts'].append(aix_host)
             else:
                 aix_host_list['dead_hosts'].append(aix_host)
-        ad_users = AIXAudit.get_ad_users(user, ossec_server)
+        ad_users = AIXAudit.get_ad_users(ossec_server)
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
@@ -206,7 +205,7 @@ def main():
         env = config['oracle']['environment']
         db_pass = get_credentials(scss_dict)
         db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
-        ad_users = db_audit.get_ad_users(user, ossec_server)
+        ad_users = db_audit.get_ad_users(ossec_server)
         # Creating a list of DBs applicable to the environment.
         alive_int = len(db_hosts['active_dbs'])
         dead_int = len(db_hosts['dead_dbs'])

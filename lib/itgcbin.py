@@ -28,7 +28,7 @@ class ITGCAudit:
         self.host_list = {}
         self.ad_users = []
 
-    def get_ad_users(self, user, ossec_server):
+    def get_ad_users(self, ossec_server):
         """Connects to ossec server, returns a list of AD users.
 
         Keyword arguments:
@@ -39,26 +39,25 @@ class ITGCAudit:
         Outputs:
         ad_user_list - list(), Users in Active Directory."""
         # Getting AD users from a file on the OSSEC server.
-        auth_user = user
+        ad_users = []
         client = SSHClient()
         client.load_system_host_keys()
         if validate_hn(ossec_server):
-            client.connect(ossec_server, username=auth_user)
+            client.connect(ossec_server)
             try:
                 _in, out, err = client.exec_command(
-                    '/bin/sudo /bin/cat /var/ossec/lists/ad_users'
+                    '/usr/bin/sudo /bin/cat /var/ossec/lists/ad_users'
                 )
             except SSHException:
                 print('Unable to retrieve AD users.  The error is:', err)
                 exit(1)
-            client.close()
-            ad_users = []
             for line in out:
                 ad_users.append(line.strip('\n'))
         else:
             print('Invalid ossec server name.')
             exit(1)
         # Parsing through the file, returning a list of users.
+        client.close()
         for user in ad_users:
             username = user.split(':')[0]
             if validate_un(username):
@@ -370,7 +369,7 @@ class UnixHostAudit(ITGCAudit):
             )
         return audited_groups
 
-    def get_hosts(self, user, ossec_server):
+    def get_hosts(self, ossec_server):
         """Returns a list of all Linux servers connected to an OSSEC
         server.
 
@@ -383,21 +382,14 @@ class UnixHostAudit(ITGCAudit):
         audited_hosts = list(), The hosts to audit.
 
         Raises:
-        gaierror - Occurs when DNS resolution of a hostname fails.
-        timeout - Occurs when connection via TCP 22 does not occur
-        within five seconds.
-        ConnectionRefusedError - Occurs when the remote host actively
-        refuses a connetion attempt via TCP 22.
-        OSError - Any generic OS errors that occur when attempting to
-        connect to the remote host via TCP 22."""
+        None."""
         self.host_list = {'active_hosts': [], 'dead_hosts': []}
         # Connect to OSSEC server, get a list of all agents.
         hostnames = []
-        auth_user = user
         ossec_client = SSHClient()
         ossec_client.load_system_host_keys()
         if validate_hn(ossec_server):
-            ossec_client.connect(ossec_server, username=auth_user)
+            ossec_client.connect(ossec_server)
             try:
                 _in, out, err = ossec_client.exec_command(
                     '/bin/sudo /var/ossec/bin/agent/control -ls'

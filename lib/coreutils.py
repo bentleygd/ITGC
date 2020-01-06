@@ -2,7 +2,7 @@
 from socket import gethostbyname, gaierror
 from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
-from socket import timeout, gaierror
+from socket import timeout
 
 from requests import post
 from paramiko import (SSHClient, AutoAddPolicy, AuthenticationException,
@@ -80,15 +80,22 @@ def ssh_test(host):
     host - str(), the host's name.
 
     Outputs:
-    Bool."""
+    Bool.
+
+    Raises:
+    BadHostKeyException - The host key given by the SSH server did not
+    match what we were expecting.
+    AuthenticatoinException - Authentication failed for some reason.
+    SSHException - Failures in SSH2 protocol negotiation or logic
+    errors.
+    timeout - Timeout occurs after 5 seconds."""
     client = SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(AutoAddPolicy)
     try:
-        if client.connect(host, timeout=5, auth_timeout=5):
-            return True
-        else:
-            return False
+        client.connect(host, timeout=5, auth_timeout=5)
+        client.close()
+        return True
     except BadHostKeyException:
         return False
     except AuthenticationException:
@@ -96,6 +103,4 @@ def ssh_test(host):
     except SSHException:
         return False
     except timeout:
-        return False
-    except  gaierror:
         return False
