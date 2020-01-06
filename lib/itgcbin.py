@@ -393,7 +393,7 @@ class UnixHostAudit(ITGCAudit):
         if validate_hn(ossec_server):
             try:
                 ossec_client.connect(ossec_server)
-                _in, host_out, err = ossec_client.exec_command(
+                _in, out, err = ossec_client.exec_command(
                     '/usr/bin/sudo /var/ossec/bin/agent_control -ls'
                 )
             except AuthenticationException:
@@ -401,7 +401,8 @@ class UnixHostAudit(ITGCAudit):
                 exit(1)
             except SSHException:
                 print('Unable to retrieve host list. The error is:', err)
-            for line in host_out:
+            host_out = out.read().decode(encoding='ascii').strip('\n')
+            for line in host_out.split('\n'):
                 if line.strip('\n').split(',')[0] != '000':
                     hosts.append(line.strip('\n'))
             for host in hosts:
@@ -410,13 +411,14 @@ class UnixHostAudit(ITGCAudit):
                     print('Invalid OSSEC ID.  Aborting')
                     exit(1)
                 try:
-                    _in, info_out, err = ossec_client.exec_command(
+                    _in, out, err = ossec_client.exec_command(
                         '/usr/bin/sudo /var/ossec/bin/agent_control -s -i ' +
                         ossec_id
                     )
                 except SSHException:
                     print('Unable to retrieve host info. The error is:', err)
-                for line in info_out:
+                info_out = out.read().decode(encoding='ascii').strip('\n')
+                for line in info_out.split('\n'):
                     host_data.append(line.strip('\n'))
                 if len(host_data[1]) > 0 and validate_hn(host_data[1]):
                     hd_name = host_data[1]
