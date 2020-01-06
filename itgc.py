@@ -96,7 +96,7 @@ def main():
         end = time()
         diff = round(end - start, 2)
         msg_body = msg_body + (
-            'Script execution time: %d seconds\n' % diff
+            'Audit execution time: %d seconds\n' % diff
         )
         mail_info['body'] = msg_body
         mail_info['subject'] = 'SOX Monthly Linux Security Review Report'
@@ -174,7 +174,7 @@ def main():
         end = time()
         diff = round(end - start, 2)
         msg_body = msg_body + (
-            'Script execution time: %d seconds\n' % diff
+            'Audit execution time: %d seconds\n' % diff
         )
         mail_info['body'] = msg_body
         mail_info['subject'] = 'SOX Monthly AIX Security Review Report'
@@ -215,7 +215,7 @@ def main():
         for db in db_hosts['active_dbs']:
             user_info = db_audit.get_db_users(db_pass, db)
             for entry in user_info:
-                if (entry['profile'] != 'SCHEMA_PROF' or
+                if (entry['profile'] != 'SCHEMA_PROF' and
                         entry['profile'] != 'DEFAULT'):
                     db_usernames.append(entry['username'])
             # Checking for users past term.
