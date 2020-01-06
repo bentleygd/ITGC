@@ -404,29 +404,29 @@ class UnixHostAudit(ITGCAudit):
             for line in host_out:
                 if line.strip('\n').split(',')[0] != '000':
                     hosts.append(line.strip('\n'))
-        for host in hosts:
-            ossec_id = host.split(',')[0]
-            if not match(r'\d{4,6}', ossec_id):
-                print('Invalid OSSEC ID.  Aborting')
-                exit(1)
-            try:
-                _in, info_out, err = ossec_client.exec_command(
-                    '/usr/bin/sudo /var/ossec/bin/agent_control -s -i ' +
-                    ossec_id
-                )
-            except SSHException:
-                print('Unable to retrieve host info. The error is:', err)
-            for line in info_out:
-                host_data.append(line.strip('\n'))
-            if len(host_data[1]) > 0 and validate_hn(host_data[1]):
-                hd_name = host_data[1]
-                hd_os_string = host_data[4]
-            if self.os == 'Linux':
-                if not match(r'^AIX', hd_os_string):
-                    hostnames.add(hd_name)
-            elif self.os == 'AIX':
-                if match(r'^AIX', hd_os_string):
-                    hostnames.add(hd_name)
+            for host in hosts:
+                ossec_id = host.split(',')[0]
+                if not match(r'\d{4,6}', ossec_id):
+                    print('Invalid OSSEC ID.  Aborting')
+                    exit(1)
+                try:
+                    _in, info_out, err = ossec_client.exec_command(
+                        '/usr/bin/sudo /var/ossec/bin/agent_control -s -i ' +
+                        ossec_id
+                    )
+                except SSHException:
+                    print('Unable to retrieve host info. The error is:', err)
+                for line in info_out:
+                    host_data.append(line.strip('\n'))
+                if len(host_data[1]) > 0 and validate_hn(host_data[1]):
+                    hd_name = host_data[1]
+                    hd_os_string = host_data[4]
+                if self.os == 'Linux':
+                    if not match(r'^AIX', hd_os_string):
+                        hostnames.add(hd_name)
+                elif self.os == 'AIX':
+                    if match(r'^AIX', hd_os_string):
+                        hostnames.add(hd_name)
         ossec_client.close()
         for hostname in hostnames:
             if ssh_test(hostname):
