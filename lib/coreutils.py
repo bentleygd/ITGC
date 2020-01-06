@@ -88,7 +88,8 @@ def ssh_test(host):
     AuthenticatoinException - Authentication failed for some reason.
     SSHException - Failures in SSH2 protocol negotiation or logic
     errors.
-    timeout - Timeout occurs after 5 seconds."""
+    timeout - Timeout occurs after 5 seconds.
+    gaierror - DNS resolution failure."""
     client = SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(AutoAddPolicy)
@@ -103,4 +104,6 @@ def ssh_test(host):
     except SSHException:
         return False
     except timeout:
+        return False
+    except gaierror:
         return False

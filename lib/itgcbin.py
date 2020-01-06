@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from re import match, search
+from socket import timeout
 
 from cx_Oracle import connect, Error
 from paramiko import SSHClient, SSHException, AuthenticationException
@@ -320,10 +321,12 @@ class UnixHostAudit(ITGCAudit):
                     local_users.append(line.split(':')[0])
         except AuthenticationException:
             print('Authentication failed.  Unable to get local users.')
-            exit(1)
+            pass
         except SSHException:
             print('Unable to get local users. The error is:', err)
-            exit(1)
+            pass
+        except timeout:
+            print('Timeout to', host)
         client.close()
         return local_users
 
@@ -356,10 +359,12 @@ class UnixHostAudit(ITGCAudit):
                         m_group_list.append(host_group)
         except AuthenticationException:
             print('Authentication failed.  Unable to get local users.')
-            exit(1)
+            pass
         except SSHException:
             print('Unable to get groups. The error is:', err)
-            exit(1)
+            pass
+        except timeout:
+            print('Timeout to', timeout)
         client.close()
         # Returning monitored groups and their members as a list of
         # dictionaries.
@@ -402,13 +407,12 @@ class UnixHostAudit(ITGCAudit):
             except SSHException:
                 print('Unable to retrieve host list. The error is:', err)
             for line in out:
-                if line.strip('\n').split(',')[0] != '000':
+                ossec_id = line.strip('\n').split(',')[0]
+                if (ossec_id != '000' and
+                        match(r'\d{4,6}', ossec_id)):
                     hosts.append(line.strip('\n'))
             for host in hosts:
                 ossec_id = host.split(',')[0]
-                if not match(r'\d{4,6}', ossec_id):
-                    print('Invalid OSSEC ID.  Aborting')
-                    exit(1)
                 try:
                     _in, out, err = ossec_client.exec_command(
                         '/usr/bin/sudo /var/ossec/bin/agent_control -s -i ' +
@@ -417,16 +421,16 @@ class UnixHostAudit(ITGCAudit):
                 except SSHException:
                     print('Unable to retrieve host info. The error is:', err)
                 for line in out:
-                    host_data.append(line.strip('\n').split(','))
-                if len(host_data[1]) > 0 and validate_hn(host_data[1]):
-                    hd_name = host_data[1]
-                    hd_os_string = host_data[4]
-                if self.os == 'Linux':
-                    if not match(r'^AIX', hd_os_string):
-                        hostnames.add(hd_name)
-                elif self.os == 'AIX':
-                    if match(r'^AIX', hd_os_string):
-                        hostnames.add(hd_name)
+                    host_data = line.split(',')
+                    if len(host_data[1]) > 0 and validate_hn(host_data[1]):
+                        hd_name = host_data[1]
+                        hd_os_string = host_data[4]
+                    if self.os == 'Linux':
+                        if not match(r'^AIX', hd_os_string):
+                            hostnames.add(hd_name)
+                    elif self.os == 'AIX':
+                        if match(r'^AIX', hd_os_string):
+                            hostnames.add(hd_name)
         ossec_client.close()
         for hostname in hostnames:
             if ssh_test(hostname):
