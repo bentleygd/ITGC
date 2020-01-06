@@ -401,8 +401,7 @@ class UnixHostAudit(ITGCAudit):
                 exit(1)
             except SSHException:
                 print('Unable to retrieve host list. The error is:', err)
-            host_out = out.read().decode(encoding='ascii').strip('\n')
-            for line in host_out.split('\n'):
+            for line in out:
                 if line.strip('\n').split(',')[0] != '000':
                     hosts.append(line.strip('\n'))
             for host in hosts:
@@ -417,9 +416,8 @@ class UnixHostAudit(ITGCAudit):
                     )
                 except SSHException:
                     print('Unable to retrieve host info. The error is:', err)
-                info_out = out.read().decode(encoding='ascii').strip('\n')
-                for line in info_out.split('\n'):
-                    host_data.append(line.strip('\n'))
+                for line in out:
+                    host_data.append(line.strip('\n').split(','))
                 if len(host_data[1]) > 0 and validate_hn(host_data[1]):
                     hd_name = host_data[1]
                     hd_os_string = host_data[4]
