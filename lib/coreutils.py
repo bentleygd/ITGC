@@ -2,9 +2,11 @@
 from socket import gethostbyname, gaierror
 from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
+from socket import timeout, gaierror
 
 from requests import post
-from paramiko import SSHClient, AuthenticationException
+from paramiko import (SSHClient, AutoAddPolicy, AuthenticationException,
+                      BadHostKeyException, SSHException)
 from pyotp import TOTP
 
 
@@ -71,20 +73,29 @@ def get_credentials(scss_dict):
     return data
 
 
-def connect_test(host):
+def ssh_test(host):
     """Returns true if connection is successful.
 
     Keyword Arguments:
     host - str(), the host's name.
 
-    Outputs.
+    Outputs:
     Bool."""
     client = SSHClient()
     client.load_system_host_keys()
+    client.set_missing_host_key_policy(AutoAddPolicy)
     try:
-        if client.connect(host):
+        if client.connect(host, timeout=5, auth_timeout=5):
             return True
         else:
             return False
+    except BadHostKeyException:
+        return False
     except AuthenticationException:
+        return False
+    except SSHException:
+        return False
+    except timeout:
+        return False
+    except  gaierror:
         return False

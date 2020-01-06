@@ -2,11 +2,10 @@
 from re import match, search
 
 from cx_Oracle import connect, Error
-from paramiko import SSHClient, AutoAddPolicy
-from paramiko import (SSHException, BadHostKeyException,
-                      AuthenticationException)
+from paramiko import SSHClient, SSHException, AuthenticationException
 
 from lib.validate import validate_un, validate_hn
+from lib.coreutils import ssh_test
 
 
 class ITGCAudit:
@@ -321,7 +320,8 @@ class UnixHostAudit(ITGCAudit):
                 if not match(no_shell, shell) and validate_un(username):
                     local_users.append(line.split(':')[0])
         except AuthenticationException:
-            local_users.append('Authentication_Failed')
+            print('Authentication failed.  Unable to get local users.')
+            exit(1)
         except SSHException:
             print('Unable to get local users. The error is:', err)
             exit(1)
@@ -356,7 +356,8 @@ class UnixHostAudit(ITGCAudit):
                             len(host_group.split(':')[3]) > 0):
                         m_group_list.append(host_group)
         except AuthenticationException:
-            host_groups.append('Authentication_Failed')
+            print('Authentication failed.  Unable to get local users.')
+            exit(1)
         except SSHException:
             print('Unable to get groups. The error is:', err)
             exit(1)
@@ -401,6 +402,9 @@ class UnixHostAudit(ITGCAudit):
                 _in, out, err = ossec_client.exec_command(
                     '/bin/sudo /var/ossec/bin/agent/control -ls'
                 )
+            except AuthenticationException:
+                print('Authentication failed.  Unable to get local users.')
+                exit(1)
             except SSHException:
                 print('Unable to retrieve host list. The error is:', err)
         hosts = set()
@@ -430,32 +434,11 @@ class UnixHostAudit(ITGCAudit):
                 if match(r'^AIX', hd_os_string):
                     hostnames.append(hd_name)
         ossec_client.close()
-        client = SSHClient()
-        client.load_system_host_keys()
-        client.set_missing_host_key_policy(AutoAddPolicy)
         for hostname in hostnames:
-            try:
-                # Testing DNS resolution, the ability to connect to TCP
-                # 22 on the remote host and initial authentication.
-                # If these checks fail, add the host to the list of
-                # hosts that do not respond.
-                if client.connect(hostname, banner_timeout=5, auth_timeout=5):
-                    self.host_list['active_hosts'].append(hostname)
-            except BadHostKeyException:
+            if ssh_test(hostname):
+                self.host_list['active_hosts'].append(hostname)
+            else:
                 self.host_list['dead_hosts'].append(hostname)
-                continue
-            except AuthenticationException:
-                self.host_list['dead_hosts'].append(hostname)
-                continue
-            except SSHException:
-                self.host_list['dead_hosts'].append(hostname)
-            except ConnectionRefusedError:
-                self.host_list['dead_hosts'].append(hostname)
-                continue
-            except OSError:
-                self.host_list['dead_hosts'].append(hostname)
-                continue
-            client.close()
         return self.host_list
 
     def get_admin_ex(self, known_admins, host_admins):

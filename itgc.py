@@ -4,7 +4,7 @@ from time import time
 from argparse import ArgumentParser
 from configparser import ConfigParser
 
-from lib.coreutils import mail_send, get_credentials, connect_test
+from lib.coreutils import mail_send, get_credentials, ssh_test
 from lib import itgcbin
 
 
@@ -121,7 +121,7 @@ def main():
         aix_host_list = AIXAudit.get_hosts(user, ossec_server)
         for aix_host in aix_known_hosts:
             if (aix_host not in aix_host_list['active_hosts'] and
-                    connect_test(aix_host)):
+                    ssh_test(aix_host)):
                 aix_host_list['active_hosts'].append(aix_host)
             else:
                 aix_host_list['dead_hosts'].append(aix_host)
