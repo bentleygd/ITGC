@@ -80,7 +80,8 @@ def ssh_test(host):
     host - str(), the host's name.
 
     Outputs:
-    Bool.
+    True or False based on whether or not the function generates an
+    exception.
 
     Raises:
     BadHostKeyException - The host key given by the SSH server did not

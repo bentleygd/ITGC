@@ -24,7 +24,7 @@ class ITGCAudit:
         Methods:
         get_ad_users - Connects to ossec server, returns a list of AD
         users.
-        get_audit_ex - Compares local users to AUD, returns users not
+        get_audit_ex - Compares local users to AD, returns users not
         in AD."""
         self.host_list = {}
         self.ad_users = []
@@ -302,7 +302,13 @@ class UnixHostAudit(ITGCAudit):
         host - str(), hostname of remote system.
 
         Outputs:
-        local_users - list(), users with a valid shell."""
+        local_users - list(), users with a valid shell.
+
+        Raises:
+        AuthenticationException - Occurs when SSH authentication fails.
+        SSHException - Occurs when there is an SSH error.
+        timeout - Occurs when the connection times out after five
+        seconds."""
         no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
                     r'|/sbin/shutdown$|/usr/sbin/nologin$')
         # Connect to remote system, get a list of all user accounts that
@@ -311,7 +317,7 @@ class UnixHostAudit(ITGCAudit):
         client = SSHClient()
         client.load_system_host_keys()
         try:
-            client.connect(host)
+            client.connect(host, timeout=5)
             _in, out, err = client.exec_command('/bin/cat /etc/passwd')
             for line in out:
                 line = line.strip('\n')
@@ -321,12 +327,13 @@ class UnixHostAudit(ITGCAudit):
                     local_users.append(line.split(':')[0])
         except AuthenticationException:
             print('Authentication failed.  Unable to get local users.')
-            pass
+            return 'Authentication Failed.'
         except SSHException:
             print('Unable to get local users. The error is:', err)
-            pass
+            return 'SSH Error.  Please investigate.'
         except timeout:
             print('Timeout to', host)
+            return 'Connection timed out after 5 seconds.'
         client.close()
         return local_users
 
@@ -346,7 +353,7 @@ class UnixHostAudit(ITGCAudit):
         client = SSHClient()
         client.load_system_host_keys()
         try:
-            client.connect(host)
+            client.connect(host, timeout=5)
             _in, out, err = client.exec_command('/bin/cat /etc/group')
             for line in out:
                 host_groups.append(line.strip('\n'))
@@ -359,12 +366,13 @@ class UnixHostAudit(ITGCAudit):
                         m_group_list.append(host_group)
         except AuthenticationException:
             print('Authentication failed.  Unable to get local users.')
-            pass
+            return 'Authentication Failed.'
         except SSHException:
             print('Unable to get groups. The error is:', err)
-            pass
+            return 'SSH Error.  Please investigate.'
         except timeout:
             print('Timeout to', timeout)
+            return 'Connection timed out after 5 seconds.'
         client.close()
         # Returning monitored groups and their members as a list of
         # dictionaries.
@@ -387,7 +395,7 @@ class UnixHostAudit(ITGCAudit):
         audited_hosts = list(), The hosts to audit.
 
         Raises:
-        None."""
+        SSH Exception - Occurs when there is a SSH error."""
         self.host_list = {'active_hosts': [], 'dead_hosts': []}
         # Connect to OSSEC server, get a list of all agents.
         host_data = []
