@@ -103,5 +103,4 @@ venv.bak/
 .mypy_cache/
 
 # Configurations
-*.list
 *.cnf

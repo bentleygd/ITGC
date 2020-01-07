@@ -451,8 +451,8 @@ class UnixHostAudit(ITGCAudit):
         """Compares admin lists, returns list of exceptions.
 
         Keyword arguments:
-        known_admins - list(), dict() objects containing known admins.
-        admin_list - list(), The list of admins to audit.
+        known_admins - list(), Known good admins.
+        host_admins - list(), The list of admins to audit.
 
         Outputs:
         admin_ex - list(), A list of admin exceptions (e.g., accounts

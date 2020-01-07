@@ -1,4 +1,4 @@
-name: Lint
+name: Lint and Test
 
 on:
   pull_request:
@@ -30,4 +30,21 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=79 --statistics
     - name: Security Test with bandit
       run: |
-        bandit -ll -s B501 . -r
+        bandit -ll -s B501,B507,B601 . -r
+
+  Test:
+
+    runs-on: ubuntu-16.04
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+    - name: Install dependencies
+      run: |
+        python -m pip install pytest
+    - name: Test with Pytest
+      run: |
+        python -m pytest -v
