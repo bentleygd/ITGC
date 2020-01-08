@@ -44,12 +44,12 @@ def main():
             )
         for admin_group in admin_file:
             known_admins.append(admin_group)
-        start = time()
         linux_host_list = LinuxAudit.get_hosts(ossec_server)
         ad_users = LinuxAudit.get_ad_users(ossec_server)
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
+        start = time()
         # Running the audit for Linux.
         for host in linux_host_list.get('active_hosts'):
             users = LinuxAudit.get_users(host)
@@ -116,7 +116,6 @@ def main():
         for admin_group in admin_file:
             known_admins.append(admin_group)
         aix_known_hosts = config['aix']['known_hosts'].split(',')
-        start = time()
         aix_host_list = AIXAudit.get_hosts(ossec_server)
         for aix_host in aix_known_hosts:
             if (aix_host not in aix_host_list['active_hosts'] and
@@ -128,6 +127,7 @@ def main():
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
+        start = time()
         # Running the audit for AIX.
         for host in aix_host_list.get('active_hosts'):
             users = AIXAudit.get_users(host)

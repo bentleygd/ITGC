@@ -186,7 +186,8 @@ class OracleDBAudit(ITGCAudit):
         # them to a list.
         for row in db_cursor:
             user_data = {'username': row[0], 'profile': row[1]}
-            db_users.append(user_data)
+            if validate_un(user_data['username']):
+                db_users.append(user_data)
         # Closing the DB connection.
         db_connection.close()
         return db_users
@@ -227,7 +228,8 @@ class OracleDBAudit(ITGCAudit):
                 'username': row[0], 'granted_role': row[1],
                 'admin_option': row[2], 'default_role': row[3]
                 }
-            db_granted_roles.append(user_data)
+            if validate_un(user_data['username']):
+                db_granted_roles.append(user_data)
         # Closing the DB connection.
         db_connection.close()
         return db_granted_roles
