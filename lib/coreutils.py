@@ -5,8 +5,8 @@ from email.mime.text import MIMEText
 from socket import timeout
 
 from requests import post
-from paramiko import (SSHClient, AutoAddPolicy, AuthenticationException,
-                      BadHostKeyException, SSHException)
+from paramiko import (SSHClient, SSHException, AuthenticationException,
+                      BadHostKeyException, WarningPolicy)
 from pyotp import TOTP
 
 
@@ -65,7 +65,8 @@ def get_credentials(scss_dict):
         'totp': otp,
         'userid': userid
     }
-    scss_response = post(url, headers=headers, verify=False)
+    scss_response = post(url, headers=headers,
+                         verify='/etc/pki/tls/certs/ca-bundle.crt')
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
     else:
@@ -93,7 +94,7 @@ def ssh_test(host):
     gaierror - DNS resolution failure."""
     client = SSHClient()
     client.load_system_host_keys()
-    client.set_missing_host_key_policy(AutoAddPolicy)
+    client.set_missing_host_key_policy(WarningPolicy)
     try:
         client.connect(host, timeout=5, auth_timeout=5)
         client.close()
