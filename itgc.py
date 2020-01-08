@@ -192,8 +192,6 @@ def main():
         # Object instantiation
         db_audit = itgcbin.OracleDBAudit()
         # Variable initialization
-        db_usernames = []
-        db_admins = []
         db_audit.db_user = config['oracle']['db_user']
         scss_dict = {
             'api_key': config['oracle']['scss_api'],
@@ -213,6 +211,8 @@ def main():
         # Running the audit.
         start = time()
         for db in db_hosts['active_dbs']:
+            db_usernames = []
+            db_admins = []
             user_info = db_audit.get_db_users(db_pass, db)
             for entry in user_info:
                 if (entry['profile'] != 'SCHEMA_PROF' and
