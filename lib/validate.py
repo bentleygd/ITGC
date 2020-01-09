@@ -16,3 +16,11 @@ def validate_un(username):
         return True
     else:
         return False
+
+
+def validate_email(email):
+    """"Returns true if email passes validation."""
+    if match(r'[a-zA-Z0-9_-]{1,32}\@[a-zA-Z0-9\.-]{1,96}', email):
+        return True
+    else:
+        return False
