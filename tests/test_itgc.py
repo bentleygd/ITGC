@@ -31,7 +31,7 @@ class TestBaseConfig:
 
         Raises:
         None."""
-        test = exists('test.cnf')
+        test = exists('example.conf')
         assert test is True
 
     def test_mail_config(self):
@@ -47,7 +47,7 @@ class TestBaseConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         test_results = {
             'base_section': str(), 'sender': str(),
             'recipient': str(), 'server': str()
@@ -125,7 +125,7 @@ class TestLinuxConfig:
 
         Raises:
         None."""
-        test = exists('test.cnf')
+        test = exists('example.conf')
         assert test is True
 
     def test_linux_config_exist(self):
@@ -140,7 +140,7 @@ class TestLinuxConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'linux' in config:
             test = True
         else:
@@ -161,7 +161,7 @@ class TestLinuxConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'admin_groups' in config['linux']:
             # Change the number as appropriate.
             linux_admins = config['linux']['admin_groups'].split(',')
@@ -186,7 +186,7 @@ class TestLinuxConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'exclusions' in config['linux']:
             test = True
         else:
@@ -207,7 +207,7 @@ class TestLinuxConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'known_admins' in config['linux']:
             if exists(config['linux']['known_admins']):
                 test = True
@@ -247,7 +247,7 @@ class TestAIXConfig:
 
         Raises:
         None."""
-        test = exists('test.cnf')
+        test = exists('example.conf')
         assert test is True
 
     def test_aix_config_exist(self):
@@ -262,7 +262,7 @@ class TestAIXConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'aix' in config:
             test = True
         else:
@@ -283,7 +283,7 @@ class TestAIXConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'admin_groups' in config['aix']:
             # Change the number as appropriate.
             aix_admins = config['aix']['admin_groups'].split(',')
@@ -308,7 +308,7 @@ class TestAIXConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'exclusions' in config['aix']:
             test = True
         else:
@@ -329,7 +329,7 @@ class TestAIXConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'known_admins' in config['aix']:
             if exists(config['aix']['known_admins']):
                 test = True
@@ -368,7 +368,7 @@ class TestOracleConfig:
 
         Raises:
         None."""
-        test = exists('test.cnf')
+        test = exists('example.conf')
         assert test is True
 
     def test_oracle_config(self):
@@ -383,7 +383,7 @@ class TestOracleConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'oracle' in config:
             test = True
         else:
@@ -403,7 +403,7 @@ class TestOracleConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'known_admins' in config['oracle']:
             # Change the number as appropriate.
             dbas = config['oracle']['known_admins'].split(',')
@@ -428,7 +428,7 @@ class TestOracleConfig:
         Raises:
         None."""
         config = ConfigParser()
-        config.read('test.cnf')
+        config.read('example.conf')
         if 'exclusions' in config['oracle']:
             test = True
         else:
