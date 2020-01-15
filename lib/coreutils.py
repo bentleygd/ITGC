@@ -5,8 +5,11 @@ from email.mime.text import MIMEText
 from socket import timeout
 
 from requests import post
-from paramiko import (SSHClient, SSHException, AuthenticationException,
-                      BadHostKeyException, WarningPolicy)
+from paramiko import SSHClient, WarningPolicy
+from paramiko.ssh_exception import (
+    NoValidConnectionsError, BadHostKeyException, AuthenticationException,
+    SSHException
+)
 from pyotp import TOTP
 
 
@@ -102,6 +105,8 @@ def ssh_test(host):
     except BadHostKeyException:
         return False
     except AuthenticationException:
+        return False
+    except NoValidConnectionsError:
         return False
     except SSHException:
         return False

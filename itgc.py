@@ -3,6 +3,7 @@ from csv import DictWriter, DictReader
 from time import time
 from argparse import ArgumentParser
 from configparser import ConfigParser
+from logging import getLogger, basicConfig, INFO
 
 from lib.coreutils import mail_send, get_credentials, ssh_test
 from lib import itgcbin
@@ -10,6 +11,14 @@ from lib import itgcbin
 
 def main():
     """Doing the thing."""
+    # Setting up logging.
+    log = getLogger('ITGC_Audit')
+    basicConfig(
+        format='%(asctime)s %(name)s %(levelname)s: %(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+        level=INFO,
+        filename='itgc_audit.log'
+    )
     # Setting up an argument parser.
     a_parse = ArgumentParser(description='SOX security reviews')
     a_parse.add_argument('os', type=str, help='Linux, AIX or Oracle')
@@ -49,6 +58,7 @@ def main():
         alive_int = len(linux_host_list.get('active_hosts'))
         dead_int = len(linux_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
+        log.info('Beginning Linux ITGC Audit.')
         start = time()
         # Running the audit for Linux.
         for host in linux_host_list.get('active_hosts'):
@@ -103,6 +113,7 @@ def main():
         # Emailing a report with the audit findings.
         mail_send(mail_info)
         results_read.close()
+        log.info('Linux audit completed in %d seconds', diff)
 
     if args.os == 'AIX':
         AIXAudit = itgcbin.UnixHostAudit('AIX')
@@ -127,6 +138,7 @@ def main():
         alive_int = len(aix_host_list.get('active_hosts'))
         dead_int = len(aix_host_list.get('dead_hosts'))
         total_int = alive_int + dead_int
+        log.info('Beginning AIX ITGC audit.')
         start = time()
         # Running the audit for AIX.
         for host in aix_host_list.get('active_hosts'):
@@ -181,6 +193,7 @@ def main():
         # Emailing a report with the audit findings.
         mail_send(mail_info)
         results_read.close()
+        log.info('AIX ITGC audit complete in %d', diff)
 
     if args.os == 'Oracle':
         # Setting up the results file.
@@ -209,6 +222,7 @@ def main():
         dead_int = len(db_hosts['dead_dbs'])
         total_int = alive_int + dead_int
         # Running the audit.
+        log.info('Beginning Oracle ITGC audit.')
         start = time()
         for db in db_hosts['active_dbs']:
             db_usernames = []
@@ -282,6 +296,7 @@ def main():
         # Emailing a report with the audit findings.
         mail_send(mail_info)
         results_read.close()
+        log.info('Oracle ITGC audit complete in %d seconds', diff)
 
 
 if __name__ == '__main__':
