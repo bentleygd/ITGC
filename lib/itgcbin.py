@@ -90,7 +90,7 @@ class ITGCAudit:
             if (user.lower() not in ad_users and
                     user.lower() not in exclusions):
                 audit_ex.append(user)
-            self.log.info('Audit exception generation complete.')
+        self.log.info('Audit exception generation complete.')
         return audit_ex
 
 

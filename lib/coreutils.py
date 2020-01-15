@@ -3,6 +3,7 @@ from socket import gethostbyname, gaierror
 from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
 from socket import timeout
+from logging import getLogger
 
 from requests import post
 from paramiko import SSHClient, WarningPolicy
@@ -95,6 +96,7 @@ def ssh_test(host):
     errors.
     timeout - Timeout occurs after 5 seconds.
     gaierror - DNS resolution failure."""
+    log = getLogger('ITGC_Audit')
     client = SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(WarningPolicy)
@@ -103,14 +105,20 @@ def ssh_test(host):
         client.close()
         return True
     except BadHostKeyException:
+        log.exception('Bad host key for %s', host)
         return False
     except AuthenticationException:
+        log.exception('Authentication faield for %s', host)
         return False
     except NoValidConnectionsError:
+        log.exception('No valid connections for %s', host)
         return False
     except SSHException:
+        log.exception('Generic SSH exception noted for %s', host)
         return False
     except timeout:
+        log.exception('Timeout occurred when connecting to %s', host)
         return False
     except gaierror:
+        log.exception('DNS resolution failed for %s', host)
         return False
