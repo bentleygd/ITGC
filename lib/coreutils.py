@@ -3,10 +3,14 @@ from socket import gethostbyname, gaierror
 from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
 from socket import timeout
+from logging import getLogger
 
 from requests import post
-from paramiko import (SSHClient, SSHException, AuthenticationException,
-                      BadHostKeyException, WarningPolicy)
+from paramiko import SSHClient, WarningPolicy
+from paramiko.ssh_exception import (
+    NoValidConnectionsError, BadHostKeyException, AuthenticationException,
+    SSHException
+)
 from pyotp import TOTP
 
 
@@ -54,6 +58,7 @@ def get_credentials(scss_dict):
 
     Output:
     data - str(), the data returned from scss."""
+    log = getLogger('ITGC_Audit')
     api_key = scss_dict['api_key']
     otp = TOTP(scss_dict['otp']).now()
     userid = scss_dict['userid']
@@ -69,7 +74,10 @@ def get_credentials(scss_dict):
                          verify='/etc/pki/tls/certs/ca-bundle.crt')
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
+        log.debug('Credentials successfully retrieved from SCSS')
     else:
+        log.error('Unable to retrieve credentials from SCSS.  The HTTP '
+                  'error code is %s', scss_response.status_code)
         exit(1)
     return data
 
@@ -92,6 +100,7 @@ def ssh_test(host):
     errors.
     timeout - Timeout occurs after 5 seconds.
     gaierror - DNS resolution failure."""
+    log = getLogger('ITGC_Audit')
     client = SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(WarningPolicy)
@@ -100,12 +109,20 @@ def ssh_test(host):
         client.close()
         return True
     except BadHostKeyException:
+        log.exception('Bad host key for %s', host)
         return False
     except AuthenticationException:
+        log.exception('Authentication faield for %s', host)
+        return False
+    except NoValidConnectionsError:
+        log.exception('No valid connections for %s', host)
         return False
     except SSHException:
+        log.exception('Generic SSH exception noted for %s', host)
         return False
     except timeout:
+        log.exception('Timeout occurred when connecting to %s', host)
         return False
     except gaierror:
+        log.exception('DNS resolution failed for %s', host)
         return False

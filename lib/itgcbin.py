@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 from re import match, search
 from socket import timeout
+from logging import getLogger
 
 from cx_Oracle import connect, Error
-from paramiko import SSHClient, SSHException, AuthenticationException
+from paramiko import SSHClient, WarningPolicy
+from paramiko.ssh_exception import SSHException, AuthenticationException
 
 from lib.validate import validate_un, validate_hn
 from lib.coreutils import ssh_test
@@ -28,6 +30,7 @@ class ITGCAudit:
         in AD."""
         self.host_list = {}
         self.ad_users = []
+        self.log = getLogger('ITGC_Audit')
 
     def get_ad_users(self, ossec_server):
         """Connects to ossec server, returns a list of AD users.
@@ -50,12 +53,16 @@ class ITGCAudit:
                     '/usr/bin/sudo /bin/cat /var/ossec/lists/ad_users'
                 )
             except SSHException:
-                print('Unable to retrieve AD users.  The error is:', err)
+                self.log.error(
+                    'Unable to retrieve AD users.  The error is %s', err,
+                    exc_info=1
+                    )
                 exit(1)
             for line in out:
                 ad_users.append(line.strip('\n'))
+            self.log.debug('Successfully retrieved AD users.')
         else:
-            print('Invalid ossec server name.')
+            self.log.error('Invalid ossec server name.')
             exit(1)
         # Parsing through the file, returning a list of users.
         client.close()
@@ -63,6 +70,7 @@ class ITGCAudit:
             username = user.split(':')[0]
             if validate_un(username):
                 self.ad_users.append(username)
+        self.log.debug('AD user list generated.')
         return self.ad_users
 
     def get_audit_ex(self, local_users, ad_users, exclusions):
@@ -82,6 +90,7 @@ class ITGCAudit:
             if (user.lower() not in ad_users and
                     user.lower() not in exclusions):
                 audit_ex.append(user)
+        self.log.info('Audit exception generation complete.')
         return audit_ex
 
 
@@ -140,6 +149,7 @@ class OracleDBAudit(ITGCAudit):
                 elif env == 'PRD':
                     if 'QA' not in dbname and 'DEV' not in dbname:
                         db_names.append(dbname)
+        self.log.debug('DB list generated.')
         for _db_name in db_names:
             # Connecting to the DB.
             try:
@@ -148,9 +158,12 @@ class OracleDBAudit(ITGCAudit):
                 if db_connection:
                     self.host_list['active_dbs'].append(_db_name)
                     db_connection.close()
+                    self.log.debug('Succesfully connected to %s', _db_name)
             except Error:
                 self.host_list['dead_dbs'].append(_db_name)
+                self.log.exception('Unable to connect to %s', _db_name)
             # Closing the DB connection.
+        self.log.debug('DB audit list generated')
         return self.host_list
 
     def get_db_users(self, pwd, db_host):
@@ -171,25 +184,28 @@ class OracleDBAudit(ITGCAudit):
         try:
             # Connecting to DB
             db_connection = connect(self.db_user, pwd, db_host)
-        except Error as con_error:
-            conError, = con_error.args
-            print('Unable to connect to', db_host + '\nThe error is:',
-                  conError.message)
+            self.log.debug('Successfully connected to %s', db_host)
+        except Error:
+            self.log.exception('Unable to connect to %s', db_host)
             exit(1)
         db_cursor = db_connection.cursor()
         # Executing query
         query = """SELECT username, profile
                    FROM dba_users
                    ORDER BY username"""
+        self.log.debug('Executing query to retrieve users for %s', db_host)
         db_cursor.execute(query)
+        self.log.debug('User query successfully executed for %s', db_host)
         # Iterating over query, converting them to a dict(), appending
         # them to a list.
+        self.log.debug('Generating DB user dictionary.')
         for row in db_cursor:
             user_data = {'username': row[0], 'profile': row[1]}
             if validate_un(user_data['username']):
                 db_users.append(user_data)
         # Closing the DB connection.
         db_connection.close()
+        self.log.info('DB users succesfully retrieved for %s', db_host)
         return db_users
 
     def get_db_granted_roles(self, pwd, db_host):
@@ -211,16 +227,17 @@ class OracleDBAudit(ITGCAudit):
         # Connecting to DB
         try:
             db_connection = connect(self.db_user, pwd, db_host)
-        except Error as con_error:
-            conError, = con_error.args
-            print('Unable to connect to DB. The error is:', conError.message)
+        except Error:
+            self.log.exception('Unable to connect to DB.')
             exit(1)
         db_cursor = db_connection.cursor()
+        self.log.debug('Executing query for granted roles for %s', db_host)
         # Executing query
         query = """SELECT grantee, granted_role, admin_option, default_role
                    FROM dba_role_privs
                    ORDER BY grantee, granted_role"""
         db_cursor.execute(query)
+        self.log.debug('Granted role query excecuted for %s', db_host)
         # Iterating over results, converting them to a dict(), writing
         # to a list.
         for row in db_cursor:
@@ -232,6 +249,7 @@ class OracleDBAudit(ITGCAudit):
                 db_granted_roles.append(user_data)
         # Closing the DB connection.
         db_connection.close()
+        self.log.info('DB granted roles retrieved for %s', db_host)
         return db_granted_roles
 
     def get_admin_ex(self, known_admins, db_admins):
@@ -252,6 +270,7 @@ class OracleDBAudit(ITGCAudit):
             if (user.lower() not in known_admins and
                     user.lower() not in admin_ex):
                 admin_ex.append(user)
+        self.log.info('DBA exceptions generated.')
         return admin_ex
 
     def get_bad_profiles(self, db_users):
@@ -272,6 +291,7 @@ class OracleDBAudit(ITGCAudit):
         for user in db_users:
             if user['profile'] == 'DEFAULT' and user['username'] != 'XS$NULL':
                 bad_profiles['default_prof'].append(user['username'])
+        self.log.info('Bad profile exceptions generated.')
         return bad_profiles
 
 
@@ -317,6 +337,7 @@ class UnixHostAudit(ITGCAudit):
         # have an interactive shell.
         local_users = []
         client = SSHClient()
+        client.set_missing_host_key_policy(WarningPolicy)
         client.load_system_host_keys()
         try:
             client.connect(host, timeout=5)
@@ -328,15 +349,19 @@ class UnixHostAudit(ITGCAudit):
                 if not match(no_shell, shell) and validate_un(username):
                     local_users.append(line.split(':')[0])
         except AuthenticationException:
-            print('Authentication failed.  Unable to get local users.')
+            self.log.exception('Authentication failed for %s', host)
             return 'Authentication Failed.'
         except SSHException:
-            print('Unable to get local users. The error is:', err)
+            self.log.exception(
+                'Unable to get local users for %s.  The error is %s.',
+                host, err
+                )
             return 'SSH Error.  Please investigate.'
         except timeout:
-            print('Timeout to', host)
+            self.log.exception('Timeout to %s', host)
             return 'Connection timed out after 5 seconds.'
         client.close()
+        self.log.info('Local users retreived for %s', host)
         return local_users
 
     def get_groups(self, host, monitored_groups):
@@ -353,6 +378,7 @@ class UnixHostAudit(ITGCAudit):
         # Obtaining members of monitored groups from a remote host.
         host_groups = []
         client = SSHClient()
+        client.set_missing_host_key_policy(WarningPolicy)
         client.load_system_host_keys()
         try:
             client.connect(host, timeout=5)
@@ -367,13 +393,16 @@ class UnixHostAudit(ITGCAudit):
                             len(host_group.split(':')[3]) > 0):
                         m_group_list.append(host_group)
         except AuthenticationException:
-            print('Authentication failed.  Unable to get local users.')
+            self.log.exception('Authentication failed for %s.', host)
             return 'Authentication Failed.'
         except SSHException:
-            print('Unable to get groups. The error is:', err)
+            self.log.exception(
+                'Unable to get groups for %s.  The error is %s.',
+                host, err
+                )
             return 'SSH Error.  Please investigate.'
         except timeout:
-            print('Timeout to', timeout)
+            print('Timeout to %s', host)
             return 'Connection timed out after 5 seconds.'
         client.close()
         # Returning monitored groups and their members as a list of
@@ -382,6 +411,7 @@ class UnixHostAudit(ITGCAudit):
             audited_groups.append(
                 {m_group.split(':')[0]: m_group.split(':')[3].split(',')}
             )
+        self.log.info('Audited groups retrieved for %s', host)
         return audited_groups
 
     def get_hosts(self, ossec_server):
@@ -412,10 +442,15 @@ class UnixHostAudit(ITGCAudit):
                     '/usr/bin/sudo /var/ossec/bin/agent_control -ls'
                 )
             except AuthenticationException:
-                print('Authentication failed.  Unable to get local users.')
+                self.log.exception(
+                    'Authentication failed to %s', ossec_server
+                    )
                 exit(1)
             except SSHException:
-                print('Unable to retrieve host list. The error is:', err)
+                self.log.exception(
+                    'Unable to retrieve host list from %s. The error is %s',
+                    ossec_server, err
+                )
             for line in out:
                 ossec_id = line.strip('\n').split(',')[0]
                 if (ossec_id != '000' and
@@ -429,7 +464,10 @@ class UnixHostAudit(ITGCAudit):
                         ossec_id
                     )
                 except SSHException:
-                    print('Unable to retrieve host info. The error is:', err)
+                    self.log.exception(
+                        'Unable to retrieve host info for %s. Error: %s',
+                        host, err
+                    )
                 for line in out:
                     host_data = line.split(',')
                     if len(host_data[1]) > 0 and validate_hn(host_data[1]):
@@ -447,6 +485,7 @@ class UnixHostAudit(ITGCAudit):
                 self.host_list['active_hosts'].append(hostname)
             else:
                 self.host_list['dead_hosts'].append(hostname)
+        self.log.debug('Host list retrieved from %s', ossec_server)
         return self.host_list
 
     def get_admin_ex(self, known_admins, host_admins):
@@ -470,4 +509,5 @@ class UnixHostAudit(ITGCAudit):
                         if admin not in known_admins:
                             audit_finding[tested_group].append(admin)
                     admin_ex.append(audit_finding)
+        self.log.info('Admin exceptions generated.')
         return admin_ex
