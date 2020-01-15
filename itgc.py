@@ -15,7 +15,7 @@ def main():
     log = getLogger('ITGC_Audit')
     basicConfig(
         format='%(asctime)s %(name)s %(levelname)s: %(message)s',
-        datefmt='%m/%d/%Y %I:%M:%S %p',
+        datefmt='%m/%d/%Y %H:%M:%S',
         level=INFO,
         filename='itgc_audit.log'
     )
