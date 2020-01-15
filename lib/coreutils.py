@@ -58,6 +58,7 @@ def get_credentials(scss_dict):
 
     Output:
     data - str(), the data returned from scss."""
+    log = getLogger('ITGC_Audit')
     api_key = scss_dict['api_key']
     otp = TOTP(scss_dict['otp']).now()
     userid = scss_dict['userid']
@@ -73,7 +74,10 @@ def get_credentials(scss_dict):
                          verify='/etc/pki/tls/certs/ca-bundle.crt')
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
+        log.debug('Credentials successfully retrieved from SCSS')
     else:
+        log.error('Unable to retrieve credentials from SCSS.  The HTTP '
+                  'error code is %s', scss_response.status_code)
         exit(1)
     return data
 
