@@ -193,7 +193,7 @@ def main():
         # Emailing a report with the audit findings.
         mail_send(mail_info)
         results_read.close()
-        log.info('AIX ITGC audit complete in %d', diff)
+        log.info('AIX ITGC audit complete in %d seconds', diff)
 
     if args.os == 'Oracle':
         # Setting up the results file.
