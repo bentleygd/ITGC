@@ -58,7 +58,7 @@ def get_credentials(scss_dict):
 
     Output:
     data - str(), the data returned from scss."""
-    log = getLogger('ITGC_Audit')
+    log = getLogger(__name__)
     api_key = scss_dict['api_key']
     otp = TOTP(scss_dict['otp']).now()
     userid = scss_dict['userid']
@@ -70,8 +70,7 @@ def get_credentials(scss_dict):
         'totp': otp,
         'userid': userid
     }
-    scss_response = post(url, headers=headers,
-                         verify='/etc/pki/tls/certs/ca-bundle.crt')
+    scss_response = post(url, headers=headers, verify='ca-bundle.crt')
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
         log.debug('Credentials successfully retrieved from SCSS')
@@ -100,7 +99,7 @@ def ssh_test(host):
     errors.
     timeout - Timeout occurs after 5 seconds.
     gaierror - DNS resolution failure."""
-    log = getLogger('ITGC_Audit')
+    log = getLogger(__name__)
     client = SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(WarningPolicy)
