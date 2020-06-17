@@ -141,6 +141,7 @@ class ITGCAudit:
         self.log.debug('Retrieved active users in %d seconds', elapsed)
         for user in user_list:
             self.ad_users.append(user)
+        return user_list
 
     def get_audit_ex(self, local_users, ad_users, exclusions):
         """Compares user lists, returns list of users not in AD.
