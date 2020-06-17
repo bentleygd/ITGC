@@ -2,13 +2,18 @@
 from re import match, search
 from socket import timeout
 from logging import getLogger
+from ssl import PROTOCOL_TLSv1_2, CERT_NONE
+from configparser import ConfigParser
+from time import time
 
 from cx_Oracle import connect, Error
 from paramiko import SSHClient, WarningPolicy
 from paramiko.ssh_exception import SSHException, AuthenticationException
+from ldap3 import Connection, Server, SUBTREE, Tls
+from ldap3.core.exceptions import LDAPExceptionError
 
 from lib.validate import validate_un, validate_hn
-from lib.coreutils import ssh_test
+from lib.coreutils import ssh_test, get_credentials
 
 
 class ITGCAudit:
@@ -30,48 +35,112 @@ class ITGCAudit:
         in AD."""
         self.host_list = {}
         self.ad_users = []
-        self.log = getLogger('ITGC_Audit')
+        self.conf = 'config.cnf'
+        self.log = getLogger(__name__)
 
-    def get_ad_users(self, ossec_server):
-        """Connects to ossec server, returns a list of AD users.
-
-        Keyword arguments:
-        user - str(), The user that will be connecting to the OSSEC
-        server.
-        ossec_sever - str(), The ossec server to connect to.
+    def get_ad_users(self):
+        """Returns a list of users from specific OUs via LDAPS.
 
         Outputs:
-        ad_user_list - list(), Users in Active Directory."""
-        # Getting AD users from a file on the OSSEC server.
-        ad_users = []
-        client = SSHClient()
-        client.load_system_host_keys()
-        if validate_hn(ossec_server):
-            client.connect(ossec_server)
-            try:
-                _in, out, err = client.exec_command(
-                    '/usr/bin/sudo /bin/cat /var/ossec/lists/ad_users'
-                )
-            except SSHException:
-                self.log.error(
-                    'Unable to retrieve AD users.  The error is %s', err,
-                    exc_info=1
-                    )
-                exit(1)
-            for line in out:
-                ad_users.append(line.strip('\n'))
-            self.log.debug('Successfully retrieved AD users.')
-        else:
-            self.log.error('Invalid ossec server name.')
+        user_list - A list of active users in AD.
+
+        Raises:
+        OSError - Occurs when the script is unable to locate or open the
+        configuration file.  It can also occur when the value used as
+        input for the wintime_to_timestr function receives an invalid
+        input.
+        KeyError - Occurs when a given key in the data_map dictionary does
+        not exist.
+        LDAPExceptionError - Occurs when the LDAP3 functions generate an
+        error.  The base class for all LDAPExcetionErrors is used so that
+        the log.exception call will catch the detailed exception while not
+        missing any potential exceptions.  A fail safe, as it were."""
+        # Setting logging
+        # Setting configuration.
+        config = ConfigParser()
+        try:
+            config.read(self.conf)
+        except OSError:
+            self.log.exception(
+                'Fatal Error: Unable to open configuration file.'
+            )
             exit(1)
-        # Parsing through the file, returning a list of users.
-        client.close()
-        for user in ad_users:
-            username = user.split(':')[0]
-            if validate_un(username):
-                self.ad_users.append(username)
-        self.log.debug('AD user list generated.')
-        return self.ad_users
+        ldap_url = config['ldap']['url']
+        ldap_bind_dn = config['ldap']['bind_dn']
+        search_ou = config['ldap']['search_ou'].split('|')
+        ldap_bind_secret = get_credentials({
+            'api_key': config['ldap']['scss_api'],
+            'otp': config['ldap']['scss_otp'],
+            'userid': config['ldap']['scss_user'],
+            'url': config['ldap']['scss_url']
+        })
+        # Connecting to LDAP.  Raising an exception with logging if the
+        # connection is unsuccessful.
+        start = time()
+        tls_config = Tls(validate=CERT_NONE, version=PROTOCOL_TLSv1_2)
+        server = Server(ldap_url, use_ssl=True, tls=tls_config)
+        try:
+            conn = Connection(
+                server,
+                user=ldap_bind_dn,
+                password=ldap_bind_secret,
+                auto_bind=True
+            )
+        except LDAPExceptionError:
+            self.log.exception('Error occurred connecting to LDAP server.')
+        self.log.debug('Successfully connected to LDAP server: %s', ldap_url)
+        # Getting user data from LDAP, and converting the data (a list
+        # of strings) to a dictionary so that it can be easily written
+        # to different outputs if so desired.
+        user_list = []
+        raw_user_data = []
+        # Searching LDAP for users that are in the OUs (and all sub-OUs)
+        # specified in config['ldap']['search_ou'].
+        ldap_filter = ('(&(objectClass=user)(objectCategory=CN=Person,' +
+                       'CN=Schema,CN=Configuration,DC=24hourfit,DC=com))')
+        for ou in search_ou:
+            user_data = conn.extend.standard.paged_search(
+                ou,
+                ldap_filter,
+                search_scope=SUBTREE,
+                attributes=['employeeID', 'sAMAccountName'],
+                paged_size=500,
+            )
+            for raw_data in user_data:
+                raw_user_data.append(raw_data['raw_attributes'])
+        # Mapping LDAP data to a dictionary.  We are decoding the values
+        # so that Python recognizes them as a string instead of byte-like
+        # objects for compatibiltiy with other string (or string realted)
+        # functions/methods.
+        for data in raw_user_data:
+            # Setting data to none if the value does not exist to avoid
+            # IndexError exceptions when parsing the data below.
+            if len(data['employeeID']) == 0:
+                data.update({'employeeID': [b'None']})
+            try:
+                data_map = {
+                    'Emp_ID': data['employeeID'][0].decode(),
+                    'Account_Name': data['sAMAccountName'][0].decode()
+                }
+            # Exception handling and logging for troubleshooting.
+            except KeyError:
+                self.log.exception(
+                    'Key error occurred for %s when creating data map.',
+                    data['name'][0].lower().decode(errors='ignore')
+                )
+            user_list.append(data_map['Account_Name'])
+        self.log.info(
+            'Successfully retrieved active user information from %s',
+            config['ldap']['url']
+        )
+        # Unbinding the LDAP object as a good house cleaning measure.
+        conn.unbind()
+        end = time()
+        _elapsed = end - start
+        elapsed = int(round(_elapsed, 0))
+        self.log.debug('Retrieved active users in %d seconds', elapsed)
+        for user in user_list:
+            self.ad_users.append(user)
 
     def get_audit_ex(self, local_users, ad_users, exclusions):
         """Compares user lists, returns list of users not in AD.
