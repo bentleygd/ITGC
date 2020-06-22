@@ -128,7 +128,7 @@ class ITGCAudit:
                     'Key error occurred for %s when creating data map.',
                     data['name'][0].lower().decode(errors='ignore')
                 )
-            user_list.append(data_map['Account_Name'])
+            user_list.append(data_map['Account_Name'].lower())
         self.log.info(
             'Successfully retrieved active user information from %s',
             config['ldap']['url']
