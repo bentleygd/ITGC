@@ -55,8 +55,7 @@ class ITGCAudit:
         error.  The base class for all LDAPExcetionErrors is used so that
         the log.exception call will catch the detailed exception while not
         missing any potential exceptions.  A fail safe, as it were."""
-        # Setting logging
-        # Setting configuration.
+        # Setting logging and configuration.
         config = ConfigParser()
         try:
             config.read(self.conf)
@@ -187,7 +186,7 @@ class OracleDBAudit(ITGCAudit):
         schema profile and a list of users with the default profile.
         """
         # Calling the parent's init to include parent's instance
-        # variables.
+        # variables and methods.
         ITGCAudit.__init__(self)
         self.db_user = str()
 
@@ -266,8 +265,8 @@ class OracleDBAudit(ITGCAudit):
         self.log.debug('Executing query to retrieve users for %s', db_host)
         db_cursor.execute(query)
         self.log.debug('User query successfully executed for %s', db_host)
-        # Iterating over query, converting them to a dict(), appending
-        # them to a list.
+        # Iterating over query, converting them to a dictionary,
+        # appending them to a list.
         self.log.debug('Generating DB user dictionary.')
         for row in db_cursor:
             user_data = {'username': row[0], 'profile': row[1]}
@@ -308,8 +307,8 @@ class OracleDBAudit(ITGCAudit):
                    ORDER BY grantee, granted_role"""
         db_cursor.execute(query)
         self.log.debug('Granted role query excecuted for %s', db_host)
-        # Iterating over results, converting them to a dict(), writing
-        # to a list.
+        # Iterating over results, converting them to a dictionary,
+        # writing to a list.
         for row in db_cursor:
             user_data = {
                 'username': row[0], 'granted_role': row[1],
@@ -334,12 +333,16 @@ class OracleDBAudit(ITGCAudit):
         admin_ex - list(), Users who are not approved to have admin
         access."""
         # Iterating over admin users from host, comparing them to
-        # known good, returing any exceptions as a list.
+        # a list of known good admins, returing any exceptions as a
+        # list.
         admin_ex = []
         for user in set(db_admins):
             if (user.lower() not in known_admins and
                     user.lower() not in admin_ex):
                 admin_ex.append(user)
+        # Logging that the check for admin exceptions occurred to
+        # be able to demonstrate to auditors that the code is auditing
+        # appropriately.
         self.log.info('DBA exceptions generated.')
         return admin_ex
 
@@ -354,6 +357,9 @@ class OracleDBAudit(ITGCAudit):
         bad_profiles - dict (), A list of human users with the schema
         profile and a list of all users with the default profile."""
         bad_profiles = {'schema_prof': [], 'default_prof': []}
+        # Iterating over each user in db_users and determining if that
+        # user has schema prof.  If it does, that user is is appended
+        # to the list of bad_profiles.
         for user in db_users:
             if (user['username'].lower() in self.ad_users and
                     user['profile'] == 'SCHEMA_PROF'):
@@ -361,6 +367,8 @@ class OracleDBAudit(ITGCAudit):
         for user in db_users:
             if user['profile'] == 'DEFAULT' and user['username'] != 'XS$NULL':
                 bad_profiles['default_prof'].append(user['username'])
+        # Logging that the check for bad profiles completed to
+        # demonstrate to auditors that the check took place.
         self.log.info('Bad profile exceptions generated.')
         return bad_profiles
 
@@ -383,7 +391,9 @@ class UnixHostAudit(ITGCAudit):
         get_hosts - Connect to the OSSEC server and gather a list of
         audited hosts based on OS (AIX or Linux).
         get_admin_ex - Connects to host and compares local admins
-        against a list of known admins.  Returns the difference."""
+        against a list of known admins.  Returns the difference.
+        get_pwd_exp_exceptions - Returns a list of "service" accounts
+        who have not changed their password in 365 days."""
         ITGCAudit.__init__(self)
         self.os = os
 
@@ -397,15 +407,16 @@ class UnixHostAudit(ITGCAudit):
         local_users - list(), users with a valid shell.
 
         Raises:
-        AuthenticationException - Occurs when SSH authentication fails.
-        SSHException - Occurs when there is an SSH error.
-        timeout - Occurs when the connection times out after five
-        seconds."""
+        AuthenticationException - Paramiko exception that occurs when
+        there is a problem with provided credentials.
+        SSHException - An underlying problem making the SSH connection
+        that is not a timeout error or authentication.
+        timeout - When the SSH connection fails due to a timeout."""
         no_shell = (r'/bin/false$|/sbin/nologin$|/bin/sync$|/sbin/halt$' +
                     r'|/sbin/shutdown$|/usr/sbin/nologin$')
+        local_users = []
         # Connect to remote system, get a list of all user accounts that
         # have an interactive shell.
-        local_users = []
         client = SSHClient()
         client.set_missing_host_key_policy(WarningPolicy)
         client.load_system_host_keys()
@@ -442,7 +453,14 @@ class UnixHostAudit(ITGCAudit):
         monitored_groups - list(), The list of admin groups to monitor.
 
         Outputs:
-        audited_groups - list(), The groups to check."""
+        audited_groups - list(), The groups to check.
+
+        Rasies:
+        AuthenticationException - Paramiko exception that occurs when
+        there is a problem with provided credentials.
+        SSHException - An underlying problem making the SSH connection
+        that is not a timeout error or authentication.
+        timeout - When the SSH connection fails due to a timeout."""
         m_group_list = []
         audited_groups = []
         # Obtaining members of monitored groups from a remote host.
@@ -497,7 +515,9 @@ class UnixHostAudit(ITGCAudit):
         audited_hosts = list(), The hosts to audit.
 
         Raises:
-        SSH Exception - Occurs when there is a SSH error."""
+        AuthenticationException - Occurs when there is an problem
+        specific to authentication, i.e. bad credentials.
+        SSHException - Occurs when there is a SSH error."""
         self.host_list = {'active_hosts': [], 'dead_hosts': []}
         # Connect to OSSEC server, get a list of all agents.
         host_data = []
@@ -521,11 +541,15 @@ class UnixHostAudit(ITGCAudit):
                     'Unable to retrieve host list from %s. The error is %s',
                     ossec_server, err
                 )
+            # Parsing the output of agent_control to obtain the OSSEC
+            # agents IDs.
             for line in out:
                 ossec_id = line.strip('\n').split(',')[0]
                 if (ossec_id != '000' and
                         match(r'\d{4,6}', ossec_id)):
                     hosts.append(line.strip('\n'))
+            # Obtaining host information (OS, name, etc.) regarding the
+            # OSSEC agents.
             for host in hosts:
                 ossec_id = host.split(',')[0]
                 try:
@@ -538,6 +562,7 @@ class UnixHostAudit(ITGCAudit):
                         'Unable to retrieve host info for %s. Error: %s',
                         host, err
                     )
+                # Creating host list specific to the OS (Linux or AIX).
                 for line in out:
                     host_data = line.split(',')
                     if len(host_data[1]) > 0 and validate_hn(host_data[1]):
@@ -550,6 +575,9 @@ class UnixHostAudit(ITGCAudit):
                         if match(r'^AIX', hd_os_string):
                             hostnames.add(hd_name)
         ossec_client.close()
+        # Checking SSH connecitivity to the host.  If we're unable to
+        # connect to the remote host, we add it to the list of
+        # unreachable hosts.
         for hostname in hostnames:
             if ssh_test(hostname):
                 self.host_list['active_hosts'].append(hostname)
@@ -569,6 +597,10 @@ class UnixHostAudit(ITGCAudit):
         admin_ex - list(), A list of admin exceptions (e.g., accounts
         that have admin access but are not on the approved list)."""
         admin_ex = []
+        # Iterating through the list of known admins and comparing it
+        # to the list of admins on a host.  If an admin account on the
+        # host is not in the known admin group, we append it to the
+        # admin exception list.
         for known_admin in known_admins:
             for admins in host_admins:
                 tested_group = known_admin.split(':')[0]
@@ -579,5 +611,71 @@ class UnixHostAudit(ITGCAudit):
                         if admin not in known_admins:
                             audit_finding[tested_group].append(admin)
                     admin_ex.append(audit_finding)
+        # Logging that the audit is complete to demonstrate that the
+        # audit ran.
         self.log.info('Admin exceptions generated.')
         return admin_ex
+
+    def get_pwd_exp_exceptions(self, host, local_users, ad_users):
+        """Audits user account password change time.
+
+        Keyword arugments:
+        host - str(), hostname to connect to.
+        local_users - list(), users with valid shells on the system.
+        ad_users - list(), a list of users in Active Directory (or other
+        LDAP store).
+
+        Outputs:
+        audit_exceptions - list(), user accounts that not have changed
+        their password within the acceptable timeframe.
+
+        Exceptions:
+        AuthenticationException - Paramiko exception that occurs when
+        there is a problem with provided credentials.
+        SSHException - An underlying problem making the SSH connection
+        that is not a timeout error or authentication.
+        timeout - When the SSH connect fails due to a timeout."""
+        # Iterating through each account and appending it it to a list
+        # if the account is not in active directory.  Accounts in AD
+        # should have their password expiration/rotation in AD.
+        audit_exceptions = []
+        current_time = round(time())
+        accounts_to_audit = []
+        for local_user in local_users:
+            if local_user not in ad_users:
+                accounts_to_audit.append(local_user)
+        client = SSHClient()
+        client.set_missing_host_key_policy(WarningPolicy)
+        client.load_system_host_keys()
+        # Obtaining the last password change timestamp for each account
+        # from the remote host.
+        for account in accounts_to_audit:
+            if not validate_un(account):
+                raise ValueError
+            try:
+                client.connect(host, timeout=5)
+                _in, out, err = client.exec_command(
+                    '/bin/cat /etc/shadow |grep ' + account +
+                    ' cut -d ":" -f 3'
+                )
+            # Exceptions and logging for the paramiko connection.
+            except AuthenticationException:
+                self.log.exception('Authentication failed for %s.', host)
+                return 'Authentication Failed.'
+            except SSHException:
+                self.log.exception(
+                    'Unable to get groups for %s.  The error is %s.',
+                    host, err
+                    )
+                return 'SSH Error.  Please investigate.'
+            except timeout:
+                self.log.exception('Timeout to %s', host)
+                return 'Connection timed out after 5 seconds.'
+            except ValueError:
+                self.log.exception('Input validation failed for %s', account)
+            pwd_ctime = out * 60 * 60 * 24
+            pwd_rotation_time = pwd_ctime - current_time / 24 / 60 / 60
+            if pwd_rotation_time > 365:
+                audit_exceptions.append(account)
+            client.close()
+        return audit_exceptions

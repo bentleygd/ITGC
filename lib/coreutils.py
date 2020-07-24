@@ -59,17 +59,22 @@ def get_credentials(scss_dict):
     Output:
     data - str(), the data returned from scss."""
     log = getLogger(__name__)
+    # Setting variables based on the data passed by the scss_dict.
     api_key = scss_dict['api_key']
     otp = TOTP(scss_dict['otp']).now()
     userid = scss_dict['userid']
     url = scss_dict['url']
     user_agent = 'scss-client'
+    # Building HTTP headers.
     headers = {
         'User-Agent': user_agent,
         'api-key': api_key,
         'totp': otp,
         'userid': userid
     }
+    # Connecting to SCSS.  If SSL verification fails, change verify to
+    # false.  This isn't recommended (as it defeats the purpose of
+    # verification), but it will make the code work in an emergency.
     scss_response = post(url, headers=headers, verify='ca-bundle.crt')
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
