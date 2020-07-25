@@ -49,8 +49,6 @@ class ITGCAudit:
         configuration file.  It can also occur when the value used as
         input for the wintime_to_timestr function receives an invalid
         input.
-        KeyError - Occurs when a given key in the data_map dictionary does
-        not exist.
         LDAPExceptionError - Occurs when the LDAP3 functions generate an
         error.  The base class for all LDAPExcetionErrors is used so that
         the log.exception call will catch the detailed exception while not
@@ -102,7 +100,7 @@ class ITGCAudit:
                 ou,
                 ldap_filter,
                 search_scope=SUBTREE,
-                attributes=['employeeID', 'sAMAccountName'],
+                attributes=['sAMAccountName'],
                 paged_size=500,
             )
             for raw_data in user_data:
@@ -112,22 +110,7 @@ class ITGCAudit:
         # objects for compatibiltiy with other string (or string realted)
         # functions/methods.
         for data in raw_user_data:
-            # Setting data to none if the value does not exist to avoid
-            # IndexError exceptions when parsing the data below.
-            if len(data['employeeID']) == 0:
-                data.update({'employeeID': [b'None']})
-            try:
-                data_map = {
-                    'Emp_ID': data['employeeID'][0].decode(),
-                    'Account_Name': data['sAMAccountName'][0].decode()
-                }
-            # Exception handling and logging for troubleshooting.
-            except KeyError:
-                self.log.exception(
-                    'Key error occurred for %s when creating data map.',
-                    data['name'][0].lower().decode(errors='ignore')
-                )
-            user_list.append(data_map['Account_Name'].lower())
+            user_list.append(data['sAMAcountName'][0].decode().lower())
         self.log.info(
             'Successfully retrieved active user information from %s',
             config['ldap']['url']
@@ -679,3 +662,55 @@ class UnixHostAudit(ITGCAudit):
                 audit_exceptions.append(account)
             client.close()
         return audit_exceptions
+
+
+class LDAPAudit(ITGCAudit):
+    def __init__(self):
+        """Creates a LDAPAudit object.
+
+        Instances variables:
+        no_pwd_exp - A list of user accounts that do not have a
+        password expiration.
+        svc_acct_pwd_exp - A list of service accounts that have aged
+        passwords.
+
+        Methods:
+        get_no_pwd_exp - Audits LDAP and retrieves a list of users that
+        have passwords that never expire.
+        get_bad_svc_acct_pwd - Audits LDAP and retrieves a list of
+        service accounts that have not changed their password within
+        the timeframe determined by policy."""
+        # Inheriting parent class instances variables and methods.
+        ITGCAudit.__init__(self)
+        self.no_pwd_exp = []
+        self.svc_acct_pwd_exp = []
+
+    def get_no_pwd_exp(self):
+        """Retrieves users with no password expiration.
+
+        Keyword Arguments:
+        None.
+
+        Returns:
+        self.no_pwd_exp - A list of user accounts that do not have a
+        password expiration.
+
+        Raises:
+        OSError - Occurs when the script is unable to locate or open the
+        configuration file.
+        KeyError - Occurs when a given key in the data_map dictionary does
+        not exist.
+        LDAPExceptionError - Occurs when the LDAP3 functions generate an
+        error.  The base class for all LDAPExcetionErrors is used so that
+        the log.exception call will catch the detailed exception while not
+        missing any potential exceptions.  A fail safe, as it were."""
+        # Obtaining configuration information.
+        config = ConfigParser()
+        try:
+            config.read(self.conf)
+        except OSError:
+            self.log.exception(
+                'Fatal Error: Unable to open configuration file.'
+            )
+            exit(1)
+        
