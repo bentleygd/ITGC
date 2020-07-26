@@ -35,11 +35,8 @@ See DOCS.md for more detailed documentation.
 # Features
 - Automated security reviews for Linux, AIX and Oracle DBs.  
 <h2>AIX/Linux</h2>
-
-***
-
 <h3>AIX/Linux User Auditing</h3>
-Linux user accounts are compared to a list of accounts that are retrieved from Active Directory using **ldap3**.  Any Linux account that has a valid login shell that does not have a corresponding active directory account is flagged as an audit finding.  A list of local accounts must be maintained for exceptions to the audit process (e.g., root).
+Linux user accounts are compared to a list of accounts that are retrieved from Active Directory using.  Any Linux account that has a valid login shell that does not have a corresponding active directory account is flagged as an audit finding.  A list of local accounts must be maintained for exceptions to the audit process (e.g., root).
 
 <h3>AIX/Linux Group Auditing</h3>
 Group membership of specifc groups specified in the [Linux] section of the configuration file are audited as well.  The specified groups must have a file containing the expected members of the admin group.  Otherwise, all memembers of the groups will be flagged as an audit exception.
@@ -47,11 +44,8 @@ Group membership of specifc groups specified in the [Linux] section of the confi
 ***
 
 <h2>Oracle DB</h2>
-
-***
-
 <h3>Oracle DB User Auditing</h3>
-Oracle DB user accounts are compared to a list of accounts that are retrieved from Active Directory using **ldap3**.  Any DB account that does not have a corresponding active directory account is flagged as an audit finding.  A list of local DB accounts must be maintained for exceptions to the audit process (e.g., Oracle).
+Oracle DB user accounts are compared to a list of accounts that are retrieved from Active Directory using ldap3.  Any DB account that does not have a corresponding active directory account is flagged as an audit finding.  A list of local DB accounts must be maintained for exceptions to the audit process (e.g., Oracle).
 
 <h3>DBA Granted Role Auditing</h3>
 Oracle DB users with the DBA granted role are compared to a list of users that are expected to have the DBA granted role.  Any exceptions are noted as an audit finding.
@@ -62,15 +56,10 @@ Any user that is considered an "air breather" that has SCHEMA_PROF is flagged as
 ***
 
 <h2>Report Delivery</h2>
-
-***
-
 Currently, the audit results are parsed from CSV files and are emailed to an address specified in the [mail] section of the configuration file.
 
-***
-
 # Testing
-Automated test cases are included and use the **pytest** framework.  Executing the tests is simple:  
+Automated test cases are included and use the pytest framework.  Executing the tests is simple:  
 `$ python3 -m pytest -v`
 
 # License
