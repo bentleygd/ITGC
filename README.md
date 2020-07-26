@@ -4,7 +4,7 @@ Python scripts used for SOX ITGCs.  These scripts are designed to assist in auto
 [![Known Vulnerabilities](https://snyk.io/test/github/bentleygd/ITGC/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/bentleygd/ITGC?targetFile=requirements.txt)[![Total alerts](https://img.shields.io/lgtm/alerts/g/bentleygd/ITGC.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bentleygd/ITGC/alerts/)[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/bentleygd/ITGC.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bentleygd/ITGC/context:python)![Lint and Test](https://github.com/bentleygd/ITGC/workflows/Lint%20and%20Test/badge.svg)
 
 # Purpose
-This project was started to automate user security reviews (and other audits) that may be taken as part of IT General Control testing for SOX compliance.  Additional audits may be performed that may be useful to ensure that security controls (taken out of a SOX context) are functioning as intended.  Automating these audits has the following benefits:  
+This project was started to automate user security reviews (and other audits) that may be taken as part of IT General Control testing for SOX compliance.  Additional audits may be performed that may be useful to ensure that security controls (taken out of a purely SOX context) are functioning as intended.  Automating these audits has the following benefits:  
 
 - Allows IT operations staff to focus on tasks more suited to their expertise.
 - Increases confidence in the results of the audit by reducing or eliminating human error.
@@ -33,7 +33,7 @@ The current systems which there are audit tests for are Active Directory (via LD
 See DOCS.md for more detailed documentation.
 
 # Features
-- Automated security reviews for Linux, AIX and Oracle DBs.  
+- Automated security audits for Linux, AIX and Oracle DBs.  
 <h2>AIX/Linux</h2>
 <h3>AIX/Linux User Auditing</h3>
 Linux user accounts are compared to a list of accounts that are retrieved from Active Directory using.  Any Linux account that has a valid login shell that does not have a corresponding active directory account is flagged as an audit finding.  A list of local accounts must be maintained for exceptions to the audit process (e.g., root).

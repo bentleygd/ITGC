@@ -1,6 +1,6 @@
 # ITGCLIB Documentation
 
-<h1>ITGLIB Classes</h2>
+<h1>ITGCLIB Classes</h2>
 <h2>ITGCAudit</h2>
 The ITGCAudit class is a super class that is meant to be inherited by sub-classes to allow those sub-classes to be able to use the class methods and instances variables (detailed below).  This is done to reduce duplicate code.
 
@@ -14,7 +14,7 @@ The ITGCAudit class is a super class that is meant to be inherited by sub-classe
 - **ITGCAudit.conf** \- A string that represents the location of a configuration file that is called by the ConfigParser class (specifically, ConfigParser.read()) from the configparser module.  An example configuration is provided in example.conf.  
 - **ITGCAudit.log** \- A call to the getLogger function from the logging module.  This allows for easy logging calls by referencing self.log in subclasses.
 
-<h3>ITGCAUdit Method Documentation</h3>  
+<h3>ITGCAudit Method Documentation</h3>  
 
 **get_ad_users()**
 
@@ -59,4 +59,4 @@ This method is used primarily to compare the local users on a system to the list
     )
     for bad_user in no_ad_account:
         print('%s does not have an AD account.', bad_user)
-```
+```  
