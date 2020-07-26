@@ -24,13 +24,13 @@ class ITGCAudit:
         None.
 
         Instance variables:
-        host_list - list(), The list of hosts that is audited by the
+        host_list - dict(), The list of hosts that is audited by the
         object.
         ad_users - list(), Users in AD.
 
         Methods:
-        get_ad_users - Connects to ossec server, returns a list of AD
-        users.
+        get_ad_users - Connects to AD via LDAPS, returns a list of
+        users in AD.
         get_audit_ex - Compares local users to AD, returns users not
         in AD."""
         self.host_list = {}
@@ -110,7 +110,8 @@ class ITGCAudit:
         # objects for compatibiltiy with other string (or string realted)
         # functions/methods.
         for data in raw_user_data:
-            user_list.append(data['sAMAcountName'][0].decode().lower())
+            acct_name = data['sAMAcountName'][0].decode().lower()
+            self.ad_users.append(acct_name)
         self.log.info(
             'Successfully retrieved active user information from %s',
             config['ldap']['url']
@@ -121,8 +122,7 @@ class ITGCAudit:
         _elapsed = end - start
         elapsed = int(round(_elapsed, 0))
         self.log.debug('Retrieved active users in %d seconds', elapsed)
-        for user in user_list:
-            self.ad_users.append(user)
+        user_list = self.ad_users
         return user_list
 
     def get_audit_ex(self, local_users, ad_users, exclusions):
@@ -490,8 +490,6 @@ class UnixHostAudit(ITGCAudit):
         server.
 
         Keyword arguments:
-        user - str(), The user that will be connecting to the remote
-        system.
         ossec_server - str(), The ossec server to connect to.
 
         Outputs:
@@ -600,7 +598,7 @@ class UnixHostAudit(ITGCAudit):
         return admin_ex
 
     def get_pwd_exp_exceptions(self, host, local_users, ad_users):
-        """Audits user account password change time.
+        """Audits Unix user account password change time.
 
         Keyword arugments:
         host - str(), hostname to connect to.
@@ -622,6 +620,9 @@ class UnixHostAudit(ITGCAudit):
         # if the account is not in active directory.  Accounts in AD
         # should have their password expiration/rotation in AD.
         audit_exceptions = []
+        config = ConfigParser()
+        config.read(self.conf)
+        pwd_rotate_days = int(config['linux']['pwd_rotate'])
         current_time = round(time())
         accounts_to_audit = []
         for local_user in local_users:
@@ -659,13 +660,13 @@ class UnixHostAudit(ITGCAudit):
             pwd_ctime = out * 60 * 60 * 24
             pwd_rotation_time = pwd_ctime - current_time
             pwd_rotation_days = pwd_rotation_time / 24 / 60 / 60
-            if pwd_rotation_days > 365:
+            if pwd_rotation_days > pwd_rotate_days:
                 audit_exceptions.append(account)
             client.close()
         return audit_exceptions
 
 
-class LDAPAudit(ITGCAudit):
+class LDAPAudit():
     def __init__(self):
         """Creates a LDAPAudit object.
 
@@ -674,17 +675,24 @@ class LDAPAudit(ITGCAudit):
         password expiration.
         svc_acct_pwd_exp - A list of service accounts that have aged
         passwords.
+        bad_domain_admin - A list of accounts that are not part of a
+        vetted list of domain admins.
 
         Methods:
         get_no_pwd_exp - Audits LDAP and retrieves a list of users that
         have passwords that never expire.
         get_bad_svc_acct_pwd - Audits LDAP and retrieves a list of
         service accounts that have not changed their password within
-        the timeframe determined by policy."""
+        the timeframe determined by policy.
+        audit_domain_admins - Audits the membership of the domain admin
+        group and reports any account that is not expected to have
+        domain admin privileges."""
         # Inheriting parent class instances variables and methods.
         ITGCAudit.__init__(self)
         self.no_pwd_exp = []
         self.svc_acct_pwd_exp = []
+        self.log = getLogger(__name__)
+        self.conf = 'config.cnf'
 
     def get_no_pwd_exp(self):
         """Retrieves users with no password expiration.
@@ -757,8 +765,8 @@ class LDAPAudit(ITGCAudit):
         # Checking to see if each user account has their password set
         # to never expire based on the value of the userAccountControl
         # attribute in AD.  If the user has their password set to never
-        # expire, append their SAM account name and last password
-        # change date to a list.
+        # expire, append a dictionary containing their SAM account
+        # name and last password change date to a list.
         for data in raw_user_data:
             acct_name = data['sAMAccountName'][0].decode().lower()
             uac = data['userAccountControl'][0]
