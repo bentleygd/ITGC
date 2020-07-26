@@ -657,8 +657,9 @@ class UnixHostAudit(ITGCAudit):
             except ValueError:
                 self.log.exception('Input validation failed for %s', account)
             pwd_ctime = out * 60 * 60 * 24
-            pwd_rotation_time = pwd_ctime - current_time / 24 / 60 / 60
-            if pwd_rotation_time > 365:
+            pwd_rotation_time = pwd_ctime - current_time
+            pwd_rotation_days = pwd_rotation_time / 24 / 60 / 60
+            if pwd_rotation_days > 365:
                 audit_exceptions.append(account)
             client.close()
         return audit_exceptions
