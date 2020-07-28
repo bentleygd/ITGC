@@ -29,6 +29,9 @@ The get_ad_users method is largely depedent on the [ldap] section of the configu
 **Code Example**:  
 
 ```python
+    from lib.itgcbin import ITGCAudit
+
+
     audit_obj = ITGCAudit()
     ad_users = audit_obj.get_ad_users()
 
@@ -50,6 +53,9 @@ This method is used primarily to compare the local users on a system to the list
 
 **Code Example**
 ```python
+    from lib.itgcbin import ITGCAudit
+
+
     audit_obj = ITGCAudit()
     ad_users = audit_obj.get_ad_users()
     local_accounts = ['bob', 'alice', 'tom']
@@ -60,3 +66,179 @@ This method is used primarily to compare the local users on a system to the list
     for bad_user in no_ad_account:
         print('%s does not have an AD account.', bad_user)
 ```  
+<h2>OracleDBAudit</h2>
+The OracleDBAudit class is a sub-class of the ITGCAudit class.  This class is designed to be able to automate user security reviews of Oracle databases.  This is accomplished using the cx-Oracle module, which relies on an Oracle client library.  Care should be taken in which Oracle client library is used as some Oracle client libraries require a license from Oracle.  
+
+**Class Methods**  
+- **get_db_users** \- This method retrieves all users (and their profile) from the dba_user table, appends them (as a dictionary with the keys of 'username' and profile') to the db_users list object and returns db_users when the method is called.
+- **get_db_granted_roles** \- This method retrieves all users (and their granted roles) from the dba_role_privs table, appends them (as a dictionary with the keys of 'username', 'granted_role', 'admin_option', and 'default_role') to the db_granted_roles list object and returns db_granted_roles when the method is called.
+- **get_db_list** \- This method generates a list of reachable and unreachable DBs by parsing a tnsnames.ora file and attempting to connect to the database with the password passed to the method when it is called.  The method requires that an environment be specified to function correctly.  By default, the enivronments supported are PRD, QA and DEV.  The code in this method may need to be modified to match your environment labels.
+- **get_admin_ex** \- This method generates a list of unauthorized users with DBA priviledges by comparing users with an administrative granted role to a static list of known admins.  This is dependent upon the list specified in [oracle][known_admins] portion of the configuration as well as the results of the get_db_granted_roles method.  
+- **get_bad_profiles** \- This method generates a list of human users with the SCHEMA_PROF profile and a list of users with the default profile.  In this case, "human" users are determined by the list of users that are obtained from Active Directory using the get_ad_users method that is inherited from the ITGCAudit class.  
+
+**Class Variables**  
+- **db_user** \- A string object which represents the user used to authenticate to the Oracle databses.  This value is referenced by the following methods in OracleAudit: **get_db_users**, **get_db_list**, **get_db_granted_roles**.  
+
+<h3>OracleAudit Method Documentation</h3>  
+
+**get_db_users**(pwd, db_host)
+
+Keyword Arguments:  
+- pwd \- A string that reprsents the password that will be used to connect to the datbase/
+- db_host \- A string that is the Oracle DB's SID.
+
+Returns:  
+- db_users \- A list of dictionary objects containg the username and the profile for each user.
+
+Code Example:
+```python
+    from lib import itgcbin
+
+
+    db_audit = itgcbin.OracleDBAudit()
+    # Retrieving data from the config.
+    db_audit.db_user = config['oracle']['db_user']
+    tns_file = '/path/to/tnsnames.ora'
+    env = config['oracle']['environment']
+    db_pass = 'SuperSecretSring' # Do NOT store passwords in clear text in code.
+    db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
+    # Getting a list of DB users.
+    log.info('Beginning Oracle ITGC audit.')
+    for db in db_hosts['active_dbs']:
+        db_usernames = []
+        user_info = db_audit.get_db_users(db_pass, db)
+        for entry in user_info:
+            if (entry['profile'] != 'SCHEMA_PROF' and
+                    entry['profile'] != 'DEFAULT'):
+                db_usernames.append(entry['username'])
+```  
+**get_db_granted_roles**(pwd, db_host)  
+
+Keyword Arguments:  
+- pwd \- A string that reprsents the password that will be used to connect to the datbase.
+- db_host \- A string that is the Oracle DB's SID.
+
+Returns:  
+- db_granted_roles \- A list of database user dictionaries containg the granted role(s) of each user.  
+
+Code Example:  
+```python
+    from lib import itgcbin
+
+
+    db_audit = itgcbin.OracleDBAudit()
+    # Retrieving data from the config.
+    db_audit.db_user = config['oracle']['db_user']
+    tns_file = '/path/to/tnsnames.ora'
+    env = config['oracle']['environment']
+    db_pass = 'SuperSecretSring' # Do NOT store passwords in clear text in code.
+    db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
+    log.info('Beginning Oracle ITGC audit.')
+    for db in db_hosts['active_dbs']:
+        # Getting granted roles.
+        granted_roles = db_audit.get_db_granted_roles(db_pass, db)
+        for role in granted_roles:
+                if (role['granted_role'] == 'DBA'):
+                    db_admins.append(role['username'])
+```
+
+**get_db_list**(t_file, db_pwd, env)
+
+Keyword Arguments:  
+- _file \- A string that should be the location of the tnsnames.ora file.
+- db_pwd \- A string that should be the corresponding password for the self.db_user.
+- env \- A string that should bet he environment to audit (i.e., production or non-production).
+
+Returns:  
+- host_lost \- A dictionary containing a list of reachable DBs and a list of unreachable DBs.  
+
+Code Example:
+```python
+    from lib import itgcbin
+
+
+    db_audit = itgcbin.OracleDBAudit()
+    # Getting information from the config.
+    db_audit.db_user = config['oracle']['db_user']
+    env = config['oracle']['environment']
+    tns_file = '/path_to_tnsnames.ora'
+    db_pass = 'ClearTextPasswordAreEvil' # Never, ever do this.
+    db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
+    # Counting the DBs.
+    alive_int = len(db_hosts['active_dbs'])
+    dead_int = len(db_hosts['dead_dbs'])
+    total_int = alive_int + dead_int
+    # Printing all the active DBs.  We would normally run audits
+    # against these.
+    for active_db in db_hosts['active_dbs']:
+        print('%s is an active DB.', active_db)
+    # Printing unreachable DBs.  Troubleshoot these.
+    for dead_db in db_hosts['dead_dbs']:
+        print('%s is not an active DB.', dead_db)  
+```
+
+**get_admin_ex**(known_admins, db_admins)
+
+Keyword Arguments:  
+known_admins \- A list of known admins who are approved to have admin level privileges.
+db_admins \- Users with an admin role that are retrieved from the Oracle DB.
+
+Returns:  
+admin_ex \- A list of DB users that are not approved having an admin role.  
+
+Code Example:  
+```python
+    from lib import itgcbin
+
+
+    db_audit = itgcbin.OracleDBAudit()
+    # Retrieving data from the config.
+    db_audit.db_user = config['oracle']['db_user']
+    tns_file = '/path/to/tnsnames.ora'
+    env = config['oracle']['environment']
+    db_pass = 'SuperSecretSring' # Do NOT store passwords in clear text in code.
+    db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
+    log.info('Beginning Oracle ITGC audit.')
+    for db in db_hosts['active_dbs']:
+        # Getting granted roles.
+        granted_roles = db_audit.get_db_granted_roles(db_pass, db)
+        # Creating an admin list.
+        for role in granted_roles:
+                if (role['granted_role'] == 'DBA'):
+                    db_admins.append(role['username'])
+        # Checking for DBA exceptions.
+        dba_exception = db_audit.get_admin_ex(
+            config['oracle']['known_admins'], db_admins
+        )
+        print('Here are the bad admins:', dba_exception)
+```
+
+**get_bad_profiles**(db_users)
+
+Keyword Arguments:  
+db_users - A list of DB users and profiles generated by the get_db_users method.
+
+Returns:  
+bad_profiles - A dictionary containg two lists: a list of human users with SCHEMA_PROF (bad_profiles['schema_prof']) and a list of all users with the DEFAULT profile (bad_profiles['default_prof']).  
+
+Code Example:  
+```python
+    from lib import itgcbin
+
+
+    db_audit = itgcbin.OracleDBAudit()
+    # Retrieving data from the config.
+    db_audit.db_user = config['oracle']['db_user']
+    tns_file = '/path/to/tnsnames.ora'
+    env = config['oracle']['environment']
+    db_pass = 'SuperSecretSring' # Do NOT store passwords in clear text in code.
+    db_hosts = db_audit.get_db_list(tns_file, db_pass, env)
+    log.info('Beginning Oracle ITGC audit.')
+    for db in db_hosts['active_dbs']:
+        # Getting user list.
+        user_info = db_audit.get_db_users(db_pass, db)
+        # Getting bad profiles.
+        bad_profiles = db_audit.get_bad_profiles(user_info)
+        print('Users with SCHEMA_PROF:', bad_profiles['schema_prof'])
+        print('Users with DEAFULT:', bad_profiles['default_prof'])
+```

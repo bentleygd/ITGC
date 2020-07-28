@@ -177,7 +177,7 @@ class OracleDBAudit(ITGCAudit):
         """Parses a tnsnames.ora file, returns DB host info.
 
         Keyword Arguments:
-        tns_file - str(), The location of the tnsnames.ora file.
+        _file - str(), The location of the tnsnames.ora file.
         db_pwd - str(), The password to log in to the DB.
         env - str(), The environment to audit (i.e., production or
         non-production).
@@ -226,7 +226,7 @@ class OracleDBAudit(ITGCAudit):
         db_host - str(), The DB SID.
 
         Outputs:
-        db_user_list - list(), A list of database user dictionaries
+        db_users- list(), A list of database user dictionaries
         containg the username and the profile of the user.
 
         Raises:
@@ -264,12 +264,11 @@ class OracleDBAudit(ITGCAudit):
         """Connects to the database, returns a list of users.
 
         Keyword Arguments:
-        user - str(), The database user to connect as.
         pwd - str(), The user's password.
         db_host - str(), The connection string of the database.
 
         Outputs:
-        db_user_list - list(), A list of database user dictionaries
+        db_granted_roles - list(), A list of database user dictionaries
         containg the granted role(s) of the user.
 
         Raises:
