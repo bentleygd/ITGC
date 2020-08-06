@@ -184,7 +184,13 @@ class OracleDBAudit(ITGCAudit):
 
         Outputs:
         host_lost - Dict(), a dictionary containing reachable and
-        unreachable DBs."""
+        unreachable DBs.
+
+        Raises:
+        Error - The base class for exceptions for the cx_oracle module.
+        This occurs when something goes wrong connecting to the the DB.
+        The base class is used in order to be able to catch any
+        sub exception, the details of which would be logged."""
         # Variable initialization.
         db_names = []
         self.host_list = {'active_dbs': [], 'dead_dbs': []}
@@ -230,8 +236,10 @@ class OracleDBAudit(ITGCAudit):
         containg the username and the profile of the user.
 
         Raises:
-        con_error - Unable to connect to the database.  Prints error
-        message and exits with a status code of 1."""
+        Error - The base class for exceptions for the cx_oracle module.
+        This occurs when something goes wrong connecting to the the DB.
+        The base class is used in order to be able to catch any
+        sub exception, the details of which would be logged."""
         db_users = []
         try:
             # Connecting to DB
@@ -272,8 +280,10 @@ class OracleDBAudit(ITGCAudit):
         containg the granted role(s) of the user.
 
         Raises:
-        con_error - Unable to connect to the database.  Prints error
-        message and exits with a status code of 1."""
+        Error - The base class for exceptions for the cx_oracle module.
+        This occurs when something goes wrong connecting to the the DB.
+        The base class is used in order to be able to catch any
+        sub exception, the details of which would be logged."""
         db_granted_roles = []
         # Connecting to DB
         try:
@@ -614,7 +624,8 @@ class UnixHostAudit(ITGCAudit):
         there is a problem with provided credentials.
         SSHException - An underlying problem making the SSH connection
         that is not a timeout error or authentication.
-        timeout - When the SSH connect fails due to a timeout."""
+        timeout - When the SSH connect fails due to a timeout.
+        ValueError - Occurs when input validation fails."""
         # Iterating through each account and appending it it to a list
         # if the account is not in active directory.  Accounts in AD
         # should have their password expiration/rotation in AD.
@@ -633,6 +644,9 @@ class UnixHostAudit(ITGCAudit):
         # Obtaining the last password change timestamp for each account
         # from the remote host.
         for account in accounts_to_audit:
+            # Need to change this to get the account name and
+            # associated password change time for all accounts in one
+            # connection instead of each account individually.
             if not validate_un(account):
                 raise ValueError
             try:
@@ -656,12 +670,16 @@ class UnixHostAudit(ITGCAudit):
                 return 'Connection timed out after 5 seconds.'
             except ValueError:
                 self.log.exception('Input validation failed for %s', account)
+            # Converting password change time from /etc/shadow to epoch.
             pwd_ctime = out * 60 * 60 * 24
+            # Closing SSH connection.
+            client.close()
+            # Checking to see if password change time from /etc/shadow
+            # is greater than 365 days.
             pwd_rotation_time = pwd_ctime - current_time
             pwd_rotation_days = pwd_rotation_time / 24 / 60 / 60
             if pwd_rotation_days > pwd_rotate_days:
                 audit_exceptions.append(account)
-            client.close()
         return audit_exceptions
 
 
