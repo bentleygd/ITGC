@@ -2,7 +2,7 @@
 
 <h2>ITGCLIB Classes</h2>
 <h2>ITGCAudit</h2>
-The ITGCAudit class is a super class that is meant to be inherited by sub-classes to allow those sub-classes to be able to use the class methods and instances variables (detailed below).  This is done to reduce duplicate code.
+The ITGCAudit class is a base class that is meant to be inherited by sub-classes to allow those sub-classes to be able to use the class methods and instances variables (detailed below).  This is done to reduce duplicate code.
 
 **Class Methods**:  
 - **ITGCAudit.get_ad_users** \- This method retrieves users from specific OUs (specified in the [ldap][search_ou] portion of the configuration) and stores them in the self.ad_users variable.  It returns the self.ad_users variable as user_list.  
@@ -395,4 +395,45 @@ Code Example:
         admin_groups = LinuxAudit.get_groups(host, monitored_groups)
         bad_admins = LinuxAudit.get_admin_ex(known_admins, admin_groups)
         print('The bad admins on %s are %s' % (host, bad_admins))
+```  
+**get_pwd_exp_exceptions**(host, local_users, ad_users)  
+
+Keyword Arguments:  
+- host \- The remote host to audit.
+- local_users \- The local users from the remote host.  These are obtained by the **get_users** method.
+- ad_users \- A list of users from Active Directory.  These are obtained by the **get_ad_users** method inherited from the ITGCAudit class.
+
+Returns:
+- audit_exceptions \- The list of service accounts that have a password that has not been changed in the past 365 days.  This value is set in the config['linux']['pwd_rotate'] portion of the configuration.
+
+Raises:
+- AuthenticationException \- Paramiko exception that occurs when there is a problem with the provided credentials.
+- SSHException \- An underlying problem making the SSH connection that is not a timeout error or authentication.
+- timeout \- When the SSH connect fails due to a timeout.
+- ValueError \- Occurs when input validation fails.  
+
+Code Example:  
+```python
+    from lib import itgcbin
+
+
+    LinuxAudit = itgcbin.UnixHostAudit('Linux')
+    ossec_server = 'hostname.example.com'
+    # Getting a list of Linux hosts to audit.
+    linux_hosts = LinuxAudit.get_hosts(ossec_server)
+    # Getting a list of AD users.
+    ad_users = LinuxAudit.get_ad_users()
+    for linux_host in linux_hosts:
+        # Getting local users
+        local_users = LinuxAudit.get_users(linux_host)
+        # Auditing local service account password expiration.
+        expired_svc_accounts = LinuxAudit.get_pwd_exp_exceptions(
+            linux_host,
+            local_users,
+            ad_users
+        )
+        print(
+            'The following service accounts have old passwords: %s',
+            expired_svc_accounts
+        )
 ```
