@@ -9,7 +9,7 @@ from time import time
 from cx_Oracle import connect, Error
 from paramiko import SSHClient, WarningPolicy
 from paramiko.ssh_exception import SSHException, AuthenticationException
-from ldap3 import Connection, Server, SUBTREE, Tls
+from ldap3 import Connection, Server, SUBTREE, BASE, Tls
 from ldap3.core.exceptions import LDAPExceptionError
 
 from lib.validate import validate_un, validate_hn
@@ -692,7 +692,7 @@ class LDAPAudit():
         password expiration.
         svc_acct_pwd_exp - A list of service accounts that have aged
         passwords.
-        bad_domain_admin - A list of accounts that are not part of a
+        bad_domain_admins - A list of accounts that are not part of a
         vetted list of domain admins.
 
         Methods:
@@ -706,6 +706,7 @@ class LDAPAudit():
         domain admin privileges."""
         self.no_pwd_exp = []
         self.svc_acct_pwd_exp = []
+        self.bad_domain_admins = []
         self.log = getLogger(__name__)
         self.conf = 'config.cnf'
 
@@ -722,8 +723,6 @@ class LDAPAudit():
         Raises:
         OSError - Occurs when the script is unable to locate or open the
         configuration file.
-        KeyError - Occurs when a given key in the data_map dictionary does
-        not exist.
         LDAPExceptionError - Occurs when the LDAP3 functions generate an
         error.  The base class for all LDAPExcetionErrors is used so that
         the log.exception call will catch the detailed exception while not
@@ -819,8 +818,6 @@ class LDAPAudit():
         Raises:
         OSError - Occurs when the script is unable to locate or open the
         configuration file.
-        KeyError - Occurs when a given key in the data_map dictionary does
-        not exist.
         LDAPExceptionError - Occurs when the LDAP3 functions generate an
         error.  The base class for all LDAPExcetionErrors is used so that
         the log.exception call will catch the detailed exception while not
@@ -874,8 +871,6 @@ class LDAPAudit():
             )
             for raw_data in user_data:
                 raw_user_data.append(raw_data['raw_attributes'])
-        # Determing if a password hasn't been changed since the value
-        # specified in the configuration.
         current_time = round(time())
         for data in raw_data:
             # Coverting wintime to epoch.
@@ -883,8 +878,138 @@ class LDAPAudit():
             pwd_change = wintime / 10000000 - 11644473600
             # Determining password age.
             pwd_age = int(current_time - pwd_change) / 60 / 24 / 24
+            # Determing if a password hasn't been changed since the
+            # value specified in the configuration.
             if pwd_age >= passwd_exp_days:
                 self.svc_acct_pwd_exp.append(
                     data[0]['sAMAccountName'].decode()
                 )
         return self.svc_acct_pwd_exp
+
+    def audit_domain_admins(self):
+        """Returns a list of unauthorized domain admins.
+
+        Keyword Arguments:
+        None
+
+        Returns:
+        self.bad_domain_admins - A list of user account names and
+        descriptionsthat are not authorized to have domain admin
+        privileges.
+
+        Raises:
+        OSError - Occurs when the script is unable to locate or open the
+        configuration file.
+        LDAPExceptionError - Occurs when the LDAP3 functions generate an
+        error.  The base class for all LDAPExcetionErrors is used so that
+        the log.exception call will catch the detailed exception while not
+        missing any potential exceptions."""
+        # Retrieving information from the configuration file.
+        config = ConfigParser()
+        try:
+            config.read(self.conf)
+        except OSError:
+            self.log.exception('Unable to open configuration file.')
+            exit(1)
+        ldap_url = config['ldap']['url']
+        ldap_bind_dn = config['ldap']['bind_dn']
+        adm_dn = config['ldap']['adm_dn']
+        # Creating list of approved admins.
+        approved_admins = []
+        _file = open(config['ldap']['domain_admins'], 'r')
+        for entry in _file:
+            approved_admins.append(entry.strip('\n'))
+        # Getting credentials from SCSS.
+        ldap_bind_secret = get_credentials({
+            'api_key': config['ldap']['scss_api'],
+            'otp': config['ldap']['scss_otp'],
+            'userid': config['ldap']['scss_user'],
+            'url': config['ldap']['scss_url']
+        })
+        # Creating variables to use later.
+        admin_list = []
+        admin_groups = []
+        # Connecting to LDAP.
+        tls_config = Tls(validate=CERT_NONE, version=PROTOCOL_TLSv1_2)
+        server = Server(ldap_url, use_ssl=True, tls=tls_config)
+        try:
+            conn = Connection(
+                server,
+                user=ldap_bind_dn,
+                password=ldap_bind_secret,
+                auto_bind=True
+            )
+        except LDAPExceptionError:
+            self.log.exception('Error occurred connecting to LDAP server.')
+        self.log.debug('Successfully connected to LDAP server: %s', ldap_url)
+        # Getting admins
+        builtin_admins = conn.extend.standard.paged_search(
+            adm_dn,
+            '(objectClass=group)',
+            search_scope=SUBTREE,
+            attributes=['member'],
+            paged_size=50,
+            generator=False
+        )
+        # Determining if the built-in admininstrator group member is a
+        # group or a user.  If it is a group, enumerating that groups
+        # members as well.
+        ldap_filter = '(|(objectClass=group)(objectClass=user))'
+        for builtin_admin in builtin_admins[0]['attributes']['member']:
+            search_base = builtin_admin
+            admin_data = conn.extend.standard.paged_search(
+                search_base,
+                ldap_filter,
+                BASE,
+                attributes=['sAMAccountName', 'distinguishedName',
+                            'objectClass', 'description'],
+                paged_size=100,
+                generator=False
+            )
+            # Checking to see if the group member is a group.
+            if 'group' in admin_data[0]['attributes']['objectClass']:
+                admin_groups.append(
+                    admin_data[0]['attributes']['distinguishedName']
+                )
+            # Checking to see if the group member is a user.
+            elif 'user' in admin_data[0]['attributes']['objectClass']:
+                admin_list.append({
+                    'name': admin_data[0]['attributes']['sAMAccountName'],
+                    'desc': admin_data[0]['attributes']['description'][0],
+                })
+        # Retrieving nested group information.  If the group member is
+        # a user, we append it to admin_list.  If the group member is
+        # a group, we append it to admin_groups.  This process is
+        # repeated until there are no more groups (we ahve a list of
+        # only users).
+        while len(admin_groups) > 0:
+            entry = admin_groups.pop(0)
+            admin_data = conn.extend.standard.paged_search(
+                entry,
+                ldap_filter,
+                BASE,
+                attributes=['sAMAccountName', 'distinguishedName',
+                            'objectClass', 'description', 'member'],
+                paged_size=100,
+                generator=False
+            )
+            # Checking to see if the member is a user.  If it is not
+            # already in the admin_list, append it to the admin_list.
+            if 'user' in admin_data[0]['attributes']['objectClass']:
+                admin_data = {
+                    'name': admin_data[0]['attributes']['sAMAccountName'],
+                    'desc': admin_data[0]['attributes']['description'][0]
+                }
+                if admin_data not in admin_list:
+                    admin_list.append(admin_data)
+            # Checking to see if the group member is a group.
+            elif 'group' in admin_data[0]['attributes']['objectClass']:
+                for member in admin_data[0]['attributes']['member']:
+                    admin_groups.append(member)
+        # Unbinding ldap object.
+        conn.unbind()
+        # Determining if admin is approved or not.
+        for admin in admin_list:
+            if admin['name'] not in approved_admins:
+                self.bad_domain_admins.append(admin)
+        return self.bad_domain_admins
