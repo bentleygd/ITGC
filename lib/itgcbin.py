@@ -704,8 +704,6 @@ class LDAPAudit():
         audit_domain_admins - Audits the membership of the domain admin
         group and reports any account that is not expected to have
         domain admin privileges."""
-        # Inheriting parent class instances variables and methods.
-        ITGCAudit.__init__(self)
         self.no_pwd_exp = []
         self.svc_acct_pwd_exp = []
         self.log = getLogger(__name__)
@@ -806,3 +804,87 @@ class LDAPAudit():
             'Peformed password expiration audit in %d seconds', elapsed
         )
         return self.no_pwd_exp
+
+    def get_bad_svc_acct_pwd(self):
+        """Produces a list of service accounts that have not had a
+        password change in 365 days.
+
+        Keyword Arguments:
+        None
+
+        Returns:
+        self.svc_acct_pwd_exp - A list of service accounts that have
+        aged passwords.
+
+        Raises:
+        OSError - Occurs when the script is unable to locate or open the
+        configuration file.
+        KeyError - Occurs when a given key in the data_map dictionary does
+        not exist.
+        LDAPExceptionError - Occurs when the LDAP3 functions generate an
+        error.  The base class for all LDAPExcetionErrors is used so that
+        the log.exception call will catch the detailed exception while not
+        missing any potential exceptions."""
+        # Retrieving information from the configuration file.
+        config = ConfigParser()
+        try:
+            config.read(self.conf)
+        except OSError:
+            self.log.exception('Unable to open configuration file.')
+            exit(1)
+        ldap_url = config['ldap']['url']
+        ldap_bind_dn = config['ldap']['bind_dn']
+        search_ou = config['ldap']['svc_ou'].split('|')
+        # Getting credentials from SCSS.
+        ldap_bind_secret = get_credentials({
+            'api_key': config['ldap']['scss_api'],
+            'otp': config['ldap']['scss_otp'],
+            'userid': config['ldap']['scss_user'],
+            'url': config['ldap']['scss_url']
+        })
+        # Getting password expiration time (in days).  Change this
+        # value in the configuration as approrpiate for your
+        # organization.
+        passwd_exp_days = int(config['ldap']['passwd_exp'])
+        # Connecting to LDAP.
+        tls_config = Tls(validate=CERT_NONE, version=PROTOCOL_TLSv1_2)
+        server = Server(ldap_url, use_ssl=True, tls=tls_config)
+        try:
+            conn = Connection(
+                server,
+                user=ldap_bind_dn,
+                password=ldap_bind_secret,
+                auto_bind=True
+            )
+        except LDAPExceptionError:
+            self.log.exception('Error occurred connecting to LDAP server.')
+        self.log.debug('Successfully connected to LDAP server: %s', ldap_url)
+        raw_user_data = []
+        # Searching LDAP for service accounts that are in the OUs
+        # (and all sub-OUs) specified in config['ldap']['svc_ou'].
+        ldap_filter = ('(&(objectClass=user)(objectCategory=CN=Person,' +
+                       'CN=Schema,CN=Configuration,DC=24hourfit,DC=com))')
+        for ou in search_ou:
+            user_data = conn.extend.standard.paged_search(
+                ou,
+                ldap_filter,
+                search_scope=SUBTREE,
+                attributes=['sAMAccountName', 'passwordLastChange'],
+                paged_size=500,
+            )
+            for raw_data in user_data:
+                raw_user_data.append(raw_data['raw_attributes'])
+        # Determing if a password hasn't been changed since the value
+        # specified in the configuration.
+        current_time = round(time())
+        for data in raw_data:
+            # Coverting wintime to epoch.
+            wintime = int(data[0]['passwordLastChange'])
+            pwd_change = wintime / 10000000 - 11644473600
+            # Determining password age.
+            pwd_age = int(current_time - pwd_change) / 60 / 24 / 24
+            if pwd_age >= passwd_exp_days:
+                self.svc_acct_pwd_exp.append(
+                    data[0]['sAMAccountName'].decode()
+                )
+        return self.svc_acct_pwd_exp

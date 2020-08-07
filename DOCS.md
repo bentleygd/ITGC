@@ -72,14 +72,14 @@ Returns:
 The OracleDBAudit class is a sub-class of the ITGCAudit class.  This class is designed to be able to automate user security reviews of Oracle databases.  This is accomplished using the cx-Oracle module, which relies on an Oracle client library.  Care should be taken in which Oracle client library is used as some Oracle client libraries require a license from Oracle.  
 
 **Class Methods**  
-- **get_db_users** \- This method retrieves all users (and their profile) from the dba_user table, appends them (as a dictionary with the keys of 'username' and profile') to the db_users list object and returns db_users when the method is called.
-- **get_db_granted_roles** \- This method retrieves all users (and their granted roles) from the dba_role_privs table, appends them (as a dictionary with the keys of 'username', 'granted_role', 'admin_option', and 'default_role') to the db_granted_roles list object and returns db_granted_roles when the method is called.
-- **get_db_list** \- This method generates a list of reachable and unreachable DBs by parsing a tnsnames.ora file and attempting to connect to the database with the password passed to the method when it is called.  The method requires that an environment be specified to function correctly.  By default, the enivronments supported are PRD, QA and DEV.  The code in this method may need to be modified to match your environment labels.
-- **get_admin_ex** \- This method generates a list of unauthorized users with DBA priviledges by comparing users with an administrative granted role to a static list of known admins.  This is dependent upon the list specified in [oracle][known_admins] portion of the configuration as well as the results of the get_db_granted_roles method.  
-- **get_bad_profiles** \- This method generates a list of human users with the SCHEMA_PROF profile and a list of users with the default profile.  In this case, "human" users are determined by the list of users that are obtained from Active Directory using the get_ad_users method that is inherited from the ITGCAudit class.  
+- **OracleDBAudit.get_db_users** \- This method retrieves all users (and their profile) from the dba_user table, appends them (as a dictionary with the keys of 'username' and profile') to the db_users list object and returns db_users when the method is called.
+- **OracleDBAudit.get_db_granted_roles** \- This method retrieves all users (and their granted roles) from the dba_role_privs table, appends them (as a dictionary with the keys of 'username', 'granted_role', 'admin_option', and 'default_role') to the db_granted_roles list object and returns db_granted_roles when the method is called.
+- **OracleDBAudit.get_db_list** \- This method generates a list of reachable and unreachable DBs by parsing a tnsnames.ora file and attempting to connect to the database with the password passed to the method when it is called.  The method requires that an environment be specified to function correctly.  By default, the enivronments supported are PRD, QA and DEV.  The code in this method may need to be modified to match your environment labels.
+- **OracleDBAudit.get_admin_ex** \- This method generates a list of unauthorized users with DBA priviledges by comparing users with an administrative granted role to a static list of known admins.  This is dependent upon the list specified in [oracle][known_admins] portion of the configuration as well as the results of the get_db_granted_roles method.  
+- **OracleDBAudit.get_bad_profiles** \- This method generates a list of human users with the SCHEMA_PROF profile and a list of users with the default profile.  In this case, "human" users are determined by the list of users that are obtained from Active Directory using the get_ad_users method that is inherited from the ITGCAudit class.  
 
 **Class Variables**  
-- **db_user** \- A string object which represents the user used to authenticate to the Oracle databses.  This value is referenced by the following methods in OracleDBAudit: **get_db_users**, **get_db_list**, **get_db_granted_roles**.  
+- **OracleDBAudit.db_user** \- A string object which represents the user used to authenticate to the Oracle databses.  This value is referenced by the following methods in OracleDBAudit: **get_db_users**, **get_db_list**, **get_db_granted_roles**.  
 
 <h3>OracleDBAudit Method Documentation</h3>  
 
@@ -258,14 +258,14 @@ Code Example:
 The UnixHostAudit class is a sub-class of the ITGCAudit class.  The UnixHostAudit class is designed to automate the user security review of Linux or AIX hosts.  This is accompslished by remotely executing commands on target hosts using SSH via the Paramiko module.  Additional methods can be added with minimal effort to perform additional auditing tasks as may be required.
 
 **Class Methods**  
-- **get_users** \- Connects to a remote host via paramiko and generates a list of local users with the contents of /etc/passwd.  
-- **get_groups** \- Connect to a remote host via paramiko and generates a list of users in specific groups by obtaining the membership of specific groups in /etc/group.
-- **get_hosts** \- Connects to an OSSEC server and gathers a list of auditable hosts based on OS (AIX or Linux).  This method can be modified to use different sources if need be.  The reason that the list of OSSEC agents was used in this environment is that every *nix host has an OSSEC agent installed as part of the build process.  Therefore, it is a simple matter to obtain a complete list of *nix hosts.
-- **get_admin_ex** \- Compares the local admins (members of specific groups designated as admin groups, i.e., those who can run sudo commands of note) against a list of known admins.  Returns the difference, which would be a list of accounts that are not authorized to have admin privileges.  This is essentially an over-glorified list comparison.  
-- **get_pwd_exp_exceptions** \- Returns a list of local "service" accounts who have not changed their password in 365 days.  Service accounts, in this context, are accounts that have a valid shell but are not in Active Directory (an example would be root).  These accounts should not be utilized by humans except in very specific circumstances or in the event of an emergency (break glass to keep the system up kind of thing).
+- **UnixHostAudit.get_users** \- Connects to a remote host via paramiko and generates a list of local users with the contents of /etc/passwd.  
+- **UnixHostAudit.get_groups** \- Connect to a remote host via paramiko and generates a list of users in specific groups by obtaining the membership of specific groups in /etc/group.
+- **UnixHostAudit.get_hosts** \- Connects to an OSSEC server and gathers a list of auditable hosts based on OS (AIX or Linux).  This method can be modified to use different sources if need be.  The reason that the list of OSSEC agents was used in this environment is that every *nix host has an OSSEC agent installed as part of the build process.  Therefore, it is a simple matter to obtain a complete list of *nix hosts.
+- **UnixHostAudit.get_admin_ex** \- Compares the local admins (members of specific groups designated as admin groups, i.e., those who can run sudo commands of note) against a list of known admins.  Returns the difference, which would be a list of accounts that are not authorized to have admin privileges.  This is essentially an over-glorified list comparison.  
+- **UnixHostAudit.get_pwd_exp_exceptions** \- Returns a list of local "service" accounts who have not changed their password in 365 days.  Service accounts, in this context, are accounts that have a valid shell but are not in Active Directory (an example would be root).  These accounts should not be utilized by humans except in very specific circumstances or in the event of an emergency (break glass to keep the system up kind of thing).
 
 **Class Variables**
-- **os** - The operating system (AIX or Linux) that is going to be audited.  This must be passed during class instantiation.  This will be used to determine which OSSEC agents to capture as a host list.  
+- **UnixHostAudit.os** - The operating system (AIX or Linux) that is going to be audited.  This must be passed during class instantiation.  This will be used to determine which OSSEC agents to capture as a host list.  
 
 <h3>UnixHostAudit Method Documentation</h3>
 
