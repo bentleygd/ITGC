@@ -106,3 +106,4 @@ venv.bak/
 *.cnf
 .vscode/**
 .vscode/settings.json
+.vscode/*.json

@@ -4,7 +4,7 @@ from socket import timeout
 from logging import getLogger
 from ssl import PROTOCOL_TLSv1_2, CERT_NONE
 from configparser import ConfigParser
-from time import time
+from time import time, localtime, strftime
 
 from cx_Oracle import connect, Error
 from paramiko import SSHClient, WarningPolicy
@@ -771,7 +771,7 @@ class LDAPAudit():
                 ldap_filter,
                 search_scope=SUBTREE,
                 attributes=['sAMAccountName', 'userAccountControl',
-                            'passwordLastChange'],
+                            'pwdLastSet'],
                 paged_size=500,
             )
             for raw_data in user_data:
@@ -784,10 +784,18 @@ class LDAPAudit():
         for data in raw_user_data:
             acct_name = data['sAMAccountName'][0].decode().lower()
             uac = data['userAccountControl'][0]
-            last_pwd_change = data['passwordLastChange'][0]
+            _pwd_change_time = int(data['pwdLastSet'][0])
+            if _pwd_change_time > 0:
+                pwd_change_time = _pwd_change_time / 10000000 - 11644473600
+                last_pwd_change = strftime(
+                    '%B %d %Y', localtime(pwd_change_time)
+                )
+            else:
+                last_pwd_change = _pwd_change_time
             if int(uac) >= 66048 and int(uac) <= 66096:
                 self.no_pwd_exp.append(
                         {'name': acct_name,
+                         'user_account_control': uac,
                          'last_pwd_change': last_pwd_change}
                 )
                 self.log.info(
@@ -866,7 +874,7 @@ class LDAPAudit():
                 ou,
                 ldap_filter,
                 search_scope=SUBTREE,
-                attributes=['sAMAccountName', 'passwordLastChange'],
+                attributes=['sAMAccountName', 'pwdLastSet'],
                 paged_size=500,
             )
             for raw_data in user_data:
@@ -874,7 +882,7 @@ class LDAPAudit():
         current_time = round(time())
         for data in raw_data:
             # Coverting wintime to epoch.
-            wintime = int(data[0]['passwordLastChange'])
+            wintime = int(data[0]['pwdLastSet'])
             pwd_change = wintime / 10000000 - 11644473600
             # Determining password age.
             pwd_age = int(current_time - pwd_change) / 60 / 24 / 24
