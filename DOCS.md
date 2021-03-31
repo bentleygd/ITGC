@@ -255,14 +255,14 @@ Code Example:
 ```
 
 <h2>UnixHostAudit</h2>  
-The UnixHostAudit class is a sub-class of the ITGCAudit class.  The UnixHostAudit class is designed to automate the user security review of Linux or AIX hosts.  This is accompslished by remotely executing commands on target hosts using SSH via the Paramiko module.  Additional methods can be added with minimal effort to perform additional auditing tasks as may be required.
+The UnixHostAudit class is a sub-class of the ITGCAudit class.  The UnixHostAudit class is designed to automate the user security review of Linux or AIX hosts.  This is accompslished by remotely executing commands on target hosts using SSH via the Paramiko module.  Additional methods can be added with minimal effort to perform additional auditing tasks as required.
 
 **Class Methods**  
 - **UnixHostAudit.get_users** \- Connects to a remote host via paramiko and generates a list of local users with the contents of /etc/passwd.  
 - **UnixHostAudit.get_groups** \- Connect to a remote host via paramiko and generates a list of users in specific groups by obtaining the membership of specific groups in /etc/group.
-- **UnixHostAudit.get_hosts** \- Connects to an OSSEC server and gathers a list of auditable hosts based on OS (AIX or Linux).  This method can be modified to use different sources if need be.  The reason that the list of OSSEC agents was used in this environment is that every *nix host has an OSSEC agent installed as part of the build process.  Therefore, it is a simple matter to obtain a complete list of *nix hosts.
+- **UnixHostAudit.get_hosts** \- Connects to an OSSEC server and gathers a list of auditable hosts based on OS (AIX or Linux).  This method can be modified to use different sources.  The reason that the list of OSSEC agents was used in this environment is that every *nix host has an OSSEC agent installed as part of the build process.  Therefore, it is a simple matter to obtain a complete list of *nix hosts.
 - **UnixHostAudit.get_admin_ex** \- Compares the local admins (members of specific groups designated as admin groups, i.e., those who can run sudo commands of note) against a list of known admins.  Returns the difference, which would be a list of accounts that are not authorized to have admin privileges.  This is essentially an over-glorified list comparison.  
-- **UnixHostAudit.get_pwd_exp_exceptions** \- Returns a list of local "service" accounts who have not changed their password in 365 days.  Service accounts, in this context, are accounts that have a valid shell but are not in Active Directory (an example would be root).  These accounts should not be utilized by humans except in very specific circumstances or in the event of an emergency (break glass to keep the system up kind of thing).
+- **UnixHostAudit.get_pwd_exp_exceptions** \- Returns a list of local "service" accounts with passwords unchanged for 365 days.  Service accounts, in this context, are accounts that have a valid shell, but are not in Active Directory (an example would be root).  These accounts should not be utilized by humans, except in very specific circumstances or in the event of an emergency (break glass to keep the system up kind of thing).
 
 **Class Variables**
 - **UnixHostAudit.os** - The operating system (AIX or Linux) that is going to be audited.  This must be passed during class instantiation.  This will be used to determine which OSSEC agents to capture as a host list.  
@@ -272,7 +272,7 @@ The UnixHostAudit class is a sub-class of the ITGCAudit class.  The UnixHostAudi
 **get_users**(host)
 
 Keyword Arguments:  
-- host \- The remote host to perform security testing against.  
+- host \- The remote host to be tested.  
 
 Returns:  
 - local_users \- A list object containing users in /etc/passwd that have a valid shell that would allow them to log in and be able to interact with the system.

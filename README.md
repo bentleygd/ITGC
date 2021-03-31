@@ -9,16 +9,16 @@ This project was started to automate user security reviews (and other audits) th
 - Allows IT operations staff to focus on tasks more suited to their expertise.
 - Increases confidence in the results of the audit by reducing or eliminating human error.
 - Allows for "continuous" auditing, giving business leadership confidence that IT controls are being implemented and followed.
-- Reduces the number of man hours required to execute audit activities, resulting in financial savings.
+- Reduces the level of effort required to execute audit activities, resulting in financial savings.
 
 # Install
 
 `$ git clone https://github.com/bentleygd/ITGC.git`
 
 # Usage
-In order to run the user security review scripts run:  
+In order to run the user security review scripts, run:  
 `$ python3 itgc.py [OS]`  
-The current systems which there are audit tests for are Active Directory (via LDAP), AIX, Linux and Oracle DB.  
+Audit tests currently exist for: Active Directory (via LDAP), AIX, Linux and Oracle DB.  
 
 > usage: itgc.py [-h] os  
 > SOX ITGC User Security Reviews
@@ -36,10 +36,10 @@ See DOCS.md for more detailed documentation.
 - Automated security audits for Linux, AIX and Oracle DBs.  
 <h2>AIX/Linux</h2>
 <h3>AIX/Linux User Auditing</h3>
-Linux user accounts are compared to a list of accounts that are retrieved from Active Directory using.  Any Linux account that has a valid login shell that does not have a corresponding active directory account is flagged as an audit finding.  A list of local accounts must be maintained for exceptions to the audit process (e.g., root).
+Linux user accounts are compared to a list of accounts that are retrieved from Active Directory.  Any Linux account that has a valid login shell that does not have a corresponding active directory account is flagged as an audit finding.  A list of local accounts must be maintained for exceptions to the audit process (e.g., root).
 
 <h3>AIX/Linux Group Auditing</h3>
-Group membership of specifc groups specified in the [Linux] section of the configuration file are audited as well.  The specified groups must have a file containing the expected members of the admin group.  Otherwise, all memembers of the groups will be flagged as an audit exception.
+Group membership of specific groups specified in the [Linux] section of the configuration file are audited as well.  The specified groups must have a file containing the expected members of the admin group.  Otherwise, all members of the groups will be flagged as an audit exception.
 
 <h3>AIX/Linux Account Password Change Auditing</h3>
 Accounts that are not associated with an AD account that have a valid login shell are audited to determine when their last password change occurred.  Since it is assumed that these are "service accounts", the default password rotation time is 365 days.  This value can be adjusted in the [linux] section of the configuration file.
