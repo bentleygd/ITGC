@@ -21,7 +21,7 @@ def main():
     )
     # Setting up an argument parser.
     a_parse = ArgumentParser(description='SOX security reviews')
-    a_parse.add_argument('os', type=str, help='Linux, AIX or Oracle')
+    a_parse.add_argument('os', type=str, help='Linux, AIX, Oracle or MySQL')
     args = a_parse.parse_args()
     # Setting up the results file.
     results_write = open('audit_results.csv', 'w')
@@ -297,6 +297,67 @@ def main():
         mail_send(mail_info)
         results_read.close()
         log.info('Oracle ITGC audit complete in %d seconds', diff)
+
+    if args.os == 'MySQL':
+        # Setting up the results file.
+        results_write = open('audit_results.csv', 'w')
+        fields = ['db_name', 'user']
+        results = DictWriter(results_write, fieldnames=fields)
+        results.writeheader()
+        # Object instantiation
+        mysql_audit = itgcbin.MySQLAudit()
+        # Variable initialization
+        mysql_audit.db_user = config['mysql']['db_user']
+        scss_dict = {
+            'api_key': config['mysql']['scss_api'],
+            'otp': config['mysql']['scss_otp'],
+            'userid': config['mysql']['scss_user'],
+            'url': config['mysql']['scss_url']
+        }
+        db_pass = get_credentials(scss_dict)
+        mysql_hosts = config['mysql']['hosts'].split(',')
+        ad_users = mysql_audit.get_ad_users()
+        # Running the audit.
+        log.info('Beginning MySQL audit.')
+        start = time()
+        for db in mysql_hosts:
+            # Getting MySQL DB users.
+            mysql_users = mysql_audit.get_mysql_users(db_pass, db)
+            # Checking to see if the MySQL DB user has a corresponding
+            # AD account.
+            mysql_audit_ex = mysql_audit.get_audit_ex(
+                mysql_users, ad_users, config['oracle']['exclusions']
+            )
+            # Writing to the results file.
+            results.writerow({'db_name': db, 'orphans': mysql_audit_ex})
+        # Closing the file to free it to be read later.
+        results_write.close()
+        # Parsing the results of the audit.
+        results_read = open('audit_results.csv', 'r', newline='')
+        r_reader = DictReader(results_read)
+        msg_body = '%d hosts were successfully audited out of %d hosts\n\n' % (
+            alive_int, total_int
+        )
+        for row in r_reader:
+            msg_body = msg_body + (
+                '*' * 64 + '\n' +
+                '%s results:\n' % row['db_name']
+            )
+            msg_body = msg_body + 'Accounts without AD account: '
+            for orphan in list(row['orphans']):
+                msg_body = msg_body + orphan
+            msg_body = msg_body + '\n'
+        end = time()
+        diff = round(end - start, 2)
+        msg_body = msg_body + (
+            'Audit execution time: %d seconds\n' % diff
+        )
+        mail_info['body'] = msg_body
+        mail_info['subject'] = 'Monthly MySQL User Security Review Report'
+        # Emailing a report with the audit findings.
+        mail_send(mail_info)
+        results_read.close()
+        log.info('MySQL audit complete in %d seconds', diff)
 
 
 if __name__ == '__main__':

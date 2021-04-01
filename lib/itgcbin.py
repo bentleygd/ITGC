@@ -4,13 +4,14 @@ from socket import timeout
 from logging import getLogger
 from ssl import PROTOCOL_TLSv1_2, CERT_NONE
 from configparser import ConfigParser
-from time import time, localtime, strftime
+from time import time
 
 from cx_Oracle import connect, Error
 from paramiko import SSHClient, WarningPolicy
 from paramiko.ssh_exception import SSHException, AuthenticationException
 from ldap3 import Connection, Server, SUBTREE, BASE, Tls
 from ldap3.core.exceptions import LDAPExceptionError
+from mysql import connector
 
 from lib.validate import validate_un, validate_hn
 from lib.coreutils import ssh_test, get_credentials
@@ -771,7 +772,7 @@ class LDAPAudit():
                 ldap_filter,
                 search_scope=SUBTREE,
                 attributes=['sAMAccountName', 'userAccountControl',
-                            'pwdLastSet'],
+                            'passwordLastChange'],
                 paged_size=500,
             )
             for raw_data in user_data:
@@ -784,18 +785,10 @@ class LDAPAudit():
         for data in raw_user_data:
             acct_name = data['sAMAccountName'][0].decode().lower()
             uac = data['userAccountControl'][0]
-            _pwd_change_time = int(data['pwdLastSet'][0])
-            if _pwd_change_time > 0:
-                pwd_change_time = _pwd_change_time / 10000000 - 11644473600
-                last_pwd_change = strftime(
-                    '%B %d %Y', localtime(pwd_change_time)
-                )
-            else:
-                last_pwd_change = _pwd_change_time
+            last_pwd_change = data['passwordLastChange'][0]
             if int(uac) >= 66048 and int(uac) <= 66096:
                 self.no_pwd_exp.append(
                         {'name': acct_name,
-                         'user_account_control': uac,
                          'last_pwd_change': last_pwd_change}
                 )
                 self.log.info(
@@ -874,7 +867,7 @@ class LDAPAudit():
                 ou,
                 ldap_filter,
                 search_scope=SUBTREE,
-                attributes=['sAMAccountName', 'pwdLastSet'],
+                attributes=['sAMAccountName', 'passwordLastChange'],
                 paged_size=500,
             )
             for raw_data in user_data:
@@ -882,7 +875,7 @@ class LDAPAudit():
         current_time = round(time())
         for data in raw_data:
             # Coverting wintime to epoch.
-            wintime = int(data[0]['pwdLastSet'])
+            wintime = int(data[0]['passwordLastChange'])
             pwd_change = wintime / 10000000 - 11644473600
             # Determining password age.
             pwd_age = int(current_time - pwd_change) / 60 / 24 / 24
@@ -1021,3 +1014,99 @@ class LDAPAudit():
             if admin['name'] not in approved_admins:
                 self.bad_domain_admins.append(admin)
         return self.bad_domain_admins
+
+
+class MySQLAudit(ITGCAudit):
+    def __init__(self):
+        """Creates a MySQL audit object.
+
+        Keyword Arguments:
+        None.
+
+        Instances Variables:
+        db_user - The user account used to authenticate to the DB.
+
+        Methods:
+        get_mysql_dbs - Connects to remote server and retrieves a list of
+        MYSQL dbs running on that host.
+        get_mysql_users - Connects to remote server and retrieves a list of
+        all users from the mysql.user table."""
+        # Calling parent class and setting instance variables.
+        ITGCAudit.__init__(self)
+        self.db_user = str()
+
+    def get_mysql_dbs(self, host, db_pwd):
+        """Connects to a host and retrieves list of DBs on that host.
+
+        Keyword Arguments:
+        db_pwd - Str().  The password for self.db_user.
+        host - Str().  The remote MySQL server to connect to.
+
+        Returns:
+        mysql_dbs - List().  A list of the mysql dbs on the specified host.
+
+        Exceptions:
+        mysql.connector.Error - mysql module error class called when there
+        is an error.  Specific details about the exception will be logged."""
+        # Creating list variable to store query results.
+        mysql_dbs = []
+        # Connecting to remote host and creating a cursor.  If the connection
+        # is unsuccessful, log it.
+        try:
+            mysql_con = connector.connect(
+                user=self.db_user,
+                password=db_pwd,
+                host=host,
+            )
+        except connector.Error:
+            self.log.exception('MySQL module error.')
+        mysql_cursor = mysql_con.cursor()
+        # Executing SQL with no user supplied input so input validation
+        # isn't required.
+        query_sql = ('SHOW DATABASES')
+        mysql_cursor.execute(query_sql)
+        # Iterating over the results and storing the result in a list.
+        for mysql_db in mysql_cursor:
+            mysql_dbs.append(mysql_db)
+        # Closing connections for tidiness.
+        mysql_cursor.close()
+        mysql_con.close()
+        return mysql_dbs
+
+    def get_mysql_users(self, host, db_pwd):
+        """Connects to MySQL DBs and retrieves a list of DB users.
+
+        Keyword Arguments:
+        host - str().  The remote host to connect to.
+        db_pwd - str().  The password of self.db_user.
+
+        Returns:
+        db_users - list().  A list of users from the mysql.user table.
+
+        Exceptions:
+        mysql.connector.Error - mysql module error class called when there
+        is an error.  Specific details about the exception will be logged."""
+        # Instantiating results list.
+        db_users = []
+        # Connect to the MySQL DB.
+        try:
+            mysql_con = connector.connect(
+                user=self.db_user,
+                password=db_pwd,
+                host=host,
+            )
+        except connector.Error:
+            self.log.exception('MySQL module error.')
+        # Instantiating a cursor.
+        mysql_cursor = mysql_con.cursor()
+        # Executing query to obtain distinct users from mysql.user
+        user_query = 'SELECT DISTINCT user FROM mysql.user'
+        mysql_cursor.execute(user_query, buffered=True)
+        # Iterating through the users, appending them to the list.
+        for line in mysql_cursor:
+            db_users.append(line[0])
+        # Closing connections because you put things up when you're
+        # done with them.
+        mysql_cursor.close()
+        mysql_con.close()
+        return db_users
