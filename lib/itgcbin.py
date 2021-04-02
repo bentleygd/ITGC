@@ -1027,10 +1027,10 @@ class MySQLAudit(ITGCAudit):
         db_user - The user account used to authenticate to the DB.
 
         Methods:
-        get_mysql_dbs - Connects to remote server and retrieves a list of
-        MYSQL dbs running on that host.
-        get_mysql_users - Connects to remote server and retrieves a list of
-        all users from the mysql.user table."""
+        get_mysql_dbs - Connects to remote server and retrieves a list
+        of MYSQL dbs running on that host.
+        get_mysql_users - Connects to remote server and retrieves a
+        list of all users from the mysql.user table."""
         # Calling parent class and setting instance variables.
         ITGCAudit.__init__(self)
         self.db_user = str()
@@ -1043,15 +1043,17 @@ class MySQLAudit(ITGCAudit):
         host - Str().  The remote MySQL server to connect to.
 
         Returns:
-        mysql_dbs - List().  A list of the mysql dbs on the specified host.
+        mysql_dbs - List().  A list of the mysql dbs on the specified
+        host.
 
         Exceptions:
-        mysql.connector.Error - mysql module error class called when there
-        is an error.  Specific details about the exception will be logged."""
+        mysql.connector.Error - mysql module error class called when
+        there is an error.  Specific details about the exception will
+        be logged."""
         # Creating list variable to store query results.
         mysql_dbs = []
-        # Connecting to remote host and creating a cursor.  If the connection
-        # is unsuccessful, log it.
+        # Connecting to remote host and creating a cursor.  If the
+        # connection is unsuccessful, log it.
         try:
             mysql_con = connector.connect(
                 user=self.db_user,
@@ -1074,7 +1076,7 @@ class MySQLAudit(ITGCAudit):
         return mysql_dbs
 
     def get_mysql_users(self, host, db_pwd):
-        """Connects to MySQL DBs and retrieves a list of DB users.
+        """Connects to MySQL DB and retrieves a list of DB users.
 
         Keyword Arguments:
         host - str().  The remote host to connect to.
@@ -1084,8 +1086,9 @@ class MySQLAudit(ITGCAudit):
         db_users - list().  A list of users from the mysql.user table.
 
         Exceptions:
-        mysql.connector.Error - mysql module error class called when there
-        is an error.  Specific details about the exception will be logged."""
+        mysql.connector.Error - mysql module error class called when
+        there is an error.  Specific details about the exception will
+        be logged."""
         # Instantiating results list.
         db_users = []
         # Connect to the MySQL DB.
@@ -1095,8 +1098,10 @@ class MySQLAudit(ITGCAudit):
                 password=db_pwd,
                 host=host,
             )
+        # If the connection is unsuccessful, log it and quit.
         except connector.Error:
             self.log.exception('MySQL module error.')
+            exit(1)
         # Instantiating a cursor.
         mysql_cursor = mysql_con.cursor()
         # Executing query to obtain distinct users from mysql.user
@@ -1110,3 +1115,55 @@ class MySQLAudit(ITGCAudit):
         mysql_cursor.close()
         mysql_con.close()
         return db_users
+
+    def get_mysql_grants(self, host, user_list, db_pwd):
+        """Connects to MySQL DB and gets grants for each user.
+
+        Keyword Arugments:
+        host - str().  The MySQL host to connect to.
+        user_list - list().  A list of users from the mysql.user table.
+        db_pwd - str().  The password for self.db_user.
+
+        Outputs:
+        mysql_grants - list().  A list of dict() objects that contain
+        the mysql_grants for each user.
+
+        Exceptions:
+        mysql.connector.Error - mysql module error class called when
+        there is an error.  Specific details about the exception will
+        be logged."""
+        # Initializing return value.
+        mysql_grants = []
+        # Connecting to DB.
+        try:
+            mysql_con = connector.connect(
+                user=self.db_user,
+                password=db_pwd,
+                host=host,
+            )
+        # If something bad happens, exit and log it for reivew.
+        except connector.Error:
+            self.log.exception('MySQL module error.')
+            exit(1)
+        mysql_cursor = mysql_con.cursor()
+        # Iterating over each user, retrieving their grants.
+        for user in user_list:
+            # Initializing list to store grants.
+            user_grants = []
+            # Executing query to obtain grants.
+            mysql_cursor.execute(
+                'SHOW GRANTS FOR %s' % (user),
+                buffered=True
+            )
+            # Iterating over each grant, storing them to a list.
+            for line in mysql_cursor:
+                user_grants.append(line)
+            # Storing grant info in return value.
+            mysql_grants.append({
+                'user': user,
+                'grants': user_grants
+            })
+        # Closing connections to be tidy.
+        mysql_cursor.close()
+        mysql_con.close()
+        return mysql_grants
