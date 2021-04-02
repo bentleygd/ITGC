@@ -1103,10 +1103,10 @@ class MySQLAudit(ITGCAudit):
             self.log.exception('MySQL module error.')
             exit(1)
         # Instantiating a cursor.
-        mysql_cursor = mysql_con.cursor()
+        mysql_cursor = mysql_con.cursor(buffered=True)
         # Executing query to obtain distinct users from mysql.user
         user_query = 'SELECT DISTINCT user FROM mysql.user'
-        mysql_cursor.execute(user_query, buffered=True)
+        mysql_cursor.execute(user_query)
         # Iterating through the users, appending them to the list.
         for line in mysql_cursor:
             db_users.append(line[0])
@@ -1131,7 +1131,9 @@ class MySQLAudit(ITGCAudit):
         Exceptions:
         mysql.connector.Error - mysql module error class called when
         there is an error.  Specific details about the exception will
-        be logged."""
+        be logged.
+        mysql.connection.errors.ProgrammingError - Occurs when a user
+        has no grants.  We pass over the exception as it is benign."""
         # Initializing return value.
         mysql_grants = []
         # Connecting to DB.
@@ -1145,25 +1147,55 @@ class MySQLAudit(ITGCAudit):
         except connector.Error:
             self.log.exception('MySQL module error.')
             exit(1)
-        mysql_cursor = mysql_con.cursor()
+        mysql_cursor = mysql_con.cursor(buffered=True)
         # Iterating over each user, retrieving their grants.
         for user in user_list:
             # Initializing list to store grants.
             user_grants = []
             # Executing query to obtain grants.
-            mysql_cursor.execute(
-                'SHOW GRANTS FOR %s' % (user),
-                buffered=True
-            )
-            # Iterating over each grant, storing them to a list.
-            for line in mysql_cursor:
-                user_grants.append(line)
-            # Storing grant info in return value.
-            mysql_grants.append({
-                'user': user,
-                'grants': user_grants
-            })
+            try:
+                mysql_cursor.execute('SHOW GRANTS FOR %s' % (user))
+                # Iterating over each grant, storing them to a list.
+                for line in mysql_cursor:
+                    user_grants.append(line)
+                # Storing grant info in return value.
+                mysql_grants.append({
+                    'user': user,
+                    'grants': user_grants
+                })
+            except connector.errors.ProgrammingError:
+                # This will catch any instance of a user or role that
+                # does not have any grants.
+                pass
         # Closing connections to be tidy.
         mysql_cursor.close()
         mysql_con.close()
         return mysql_grants
+
+    def get_mysql_allpriv_ex(self, grants_dict, known_admins):
+        """Identifies which users have been granted "ALL PRIVILEGES"
+        in a MySQL DB that shouldn't have the grant.
+
+        Inputs:
+        grants_dict - dict().  A dictionary containing two keys: the
+        user name and their corresponding grants.
+
+        Returns:
+        all_priv_ex - A list of dictionaries containing the following
+        keys: user and grant."""
+        # Instantiating a list object to store exceptions.
+        allpriv_exceptions = []
+        # Iterating through grants.
+        for entry in grants_dict:
+            # Looking for the string 'ALL PRIVILEGES' and checking to
+            # see if the user isn't a known DBA/authorized all priv
+            # grant user.
+            for grant in entry['grants']:
+                if ('ALL PRIVILEGES' in grant and
+                        entry['user'] not in known_admins):
+                    allpriv_exceptions.append({
+                        'user': entry['user'],
+                        'grant': grant
+                    })
+        # Return exceptions.
+        return allpriv_exceptions
