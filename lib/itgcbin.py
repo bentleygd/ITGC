@@ -1172,13 +1172,15 @@ class MySQLAudit(ITGCAudit):
         mysql_con.close()
         return mysql_grants
 
-    def get_mysql_allpriv_ex(self, grants_dict, known_admins):
+    def get_mysql_allpriv_ex(self, grants_list, known_admins):
         """Identifies which users have been granted "ALL PRIVILEGES"
         in a MySQL DB that shouldn't have the grant.
 
         Inputs:
-        grants_dict - dict().  A dictionary containing two keys: the
-        user name and their corresponding grants.
+        grants_list - list().  A list of dictionaries containing two
+        keys: the user name and their corresponding grants.
+        known_admins - list().  A list of user accounts that are
+        authorized to have all_privs.
 
         Returns:
         all_priv_ex - A list of dictionaries containing the following
@@ -1186,16 +1188,17 @@ class MySQLAudit(ITGCAudit):
         # Instantiating a list object to store exceptions.
         allpriv_exceptions = []
         # Iterating through grants.
-        for entry in grants_dict:
+        for entry in grants_list:
             # Looking for the string 'ALL PRIVILEGES' and checking to
             # see if the user isn't a known DBA/authorized all priv
             # grant user.
             for grant in entry['grants']:
-                if ('ALL PRIVILEGES' in grant and
+                if ('ALL PRIVILEGES' in str(grant) and
                         entry['user'] not in known_admins):
+                    grant_index_num = entry['grants'].index(grant)
                     allpriv_exceptions.append({
                         'user': entry['user'],
-                        'grant': grant
+                        'grant': entry['grants'][grant_index_num][0]
                     })
         # Return exceptions.
         return allpriv_exceptions
