@@ -301,7 +301,7 @@ def main():
     if args.os == 'MySQL':
         # Setting up the results file.
         results_write = open('audit_results.csv', 'w')
-        fields = ['db_name', 'user']
+        fields = ['db_name', 'orphans', 'bad_admins']
         results = DictWriter(results_write, fieldnames=fields)
         results.writeheader()
         # Object instantiation
@@ -316,20 +316,33 @@ def main():
         }
         db_pass = get_credentials(scss_dict)
         mysql_hosts = config['mysql']['hosts'].split(',')
+        known_admins = config['mysql']['admins'].split(',')
         ad_users = mysql_audit.get_ad_users()
         # Running the audit.
         log.info('Beginning MySQL audit.')
         start = time()
         for db in mysql_hosts:
-            # Getting MySQL DB users.
-            mysql_users = mysql_audit.get_mysql_users(db_pass, db)
+            # Getting MySQL DB users and grants.
+            mysql_users = mysql_audit.get_mysql_users(db, db_pass)
+            mysql_grants = mysql_audit.get_mysql_grants(
+                db, mysql_users, db_pass
+            )
             # Checking to see if the MySQL DB user has a corresponding
             # AD account.
             mysql_audit_ex = mysql_audit.get_audit_ex(
                 mysql_users, ad_users, config['oracle']['exclusions']
             )
+            # Checking the list of users with All Priv and other admin
+            # roles and comparing to a list of known admins.
+            mysql_allpriv_ex = mysql_audit.get_mysql_allpriv_ex(
+                mysql_grants, known_admins
+            )
             # Writing to the results file.
-            results.writerow({'db_name': db, 'orphans': mysql_audit_ex})
+            results.writerow({
+                'db_name': db,
+                'orphans': mysql_audit_ex,
+                'bad_admins': mysql_allpriv_ex
+            })
         # Closing the file to free it to be read later.
         results_write.close()
         # Parsing the results of the audit.
@@ -346,6 +359,10 @@ def main():
             msg_body = msg_body + 'Accounts without AD account: '
             for orphan in list(row['orphans']):
                 msg_body = msg_body + orphan
+            msg_body = msg_body + '\n'
+            msg_body = msg_body + 'Unapproved Privileged Grants:'
+            for bad_admin in list(row['bad_admins']):
+                msg_body = msg_body + bad_admin
             msg_body = msg_body + '\n'
         end = time()
         diff = round(end - start, 2)
