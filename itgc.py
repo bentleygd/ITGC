@@ -161,7 +161,7 @@ def main():
         # Parsing the results of the audit.
         results_read = open('audit_results.csv', 'r', newline='')
         r_reader = DictReader(results_read)
-        msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
+        msg_body = '%d hosts were audited out of %d hosts\n\n' % (
             alive_int, total_int
         )
         for row in r_reader:
@@ -348,33 +348,33 @@ def main():
         # Parsing the results of the audit.
         results_read = open('audit_results.csv', 'r', newline='')
         r_reader = DictReader(results_read)
-        msg_body = '%d hosts were successfully audited out of %d hosts\n\n' % (
-            alive_int, total_int
-        )
+        msg_body = 'MySQL User Audit \n'
         for row in r_reader:
             msg_body = msg_body + (
                 '*' * 64 + '\n' +
                 '%s results:\n' % row['db_name']
             )
-            msg_body = msg_body + 'Accounts without AD account: '
+            msg_body = msg_body + 'Accounts without AD account:\n'
             for orphan in list(row['orphans']):
                 msg_body = msg_body + orphan
             msg_body = msg_body + '\n'
-            msg_body = msg_body + 'Unapproved Privileged Grants:'
-            for bad_admin in list(row['bad_admins']):
-                msg_body = msg_body + bad_admin
+            msg_body = msg_body + 'Unapproved Privileged Grants:\n'
+            for bad_admin in row['bad_admins'].strip('[]').split(','):
+                for grant in bad_admin:
+                    msg_body = msg_body + grant
+                msg_body = msg_body + '\n'
             msg_body = msg_body + '\n'
         end = time()
-        diff = round(end - start, 2)
+        elapsed = round(end - start, 2)
         msg_body = msg_body + (
-            'Audit execution time: %d seconds\n' % diff
+            'Audit execution time: %d seconds\n' % elapsed
         )
         mail_info['body'] = msg_body
         mail_info['subject'] = 'Monthly MySQL User Security Review Report'
         # Emailing a report with the audit findings.
         mail_send(mail_info)
         results_read.close()
-        log.info('MySQL audit complete in %d seconds', diff)
+        log.info('MySQL audit complete in %d seconds', elapsed)
 
 
 if __name__ == '__main__':

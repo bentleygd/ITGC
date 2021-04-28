@@ -1193,8 +1193,11 @@ class MySQLAudit(ITGCAudit):
             # see if the user isn't a known DBA/authorized all priv
             # grant user.
             for grant in entry['grants']:
-                if ('ALL PRIVILEGES' in str(grant) and
-                        entry['user'] not in known_admins):
+                dba_search = search(
+                    'GRANT ALL PRIVILEGES ON .+ WITH GRANT OPTION',
+                    grant
+                )
+                if dba_search and entry['user'] not in known_admins:
                     grant_index_num = entry['grants'].index(grant)
                     allpriv_exceptions.append({
                         'user': entry['user'],
