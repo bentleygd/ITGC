@@ -75,7 +75,7 @@ def get_credentials(scss_dict):
     # Connecting to SCSS.  If SSL verification fails, change verify to
     # false.  This isn't recommended (as it defeats the purpose of
     # verification), but it will make the code work in an emergency.
-    scss_response = post(url, headers=headers, verify=False)
+    scss_response = post(url, headers=headers)
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
         log.debug('Credentials successfully retrieved from SCSS')
