@@ -1195,7 +1195,7 @@ class MySQLAudit(ITGCAudit):
             for grant in entry['grants']:
                 dba_search = search(
                     'GRANT ALL PRIVILEGES ON .+ WITH GRANT OPTION',
-                    str(grant) # Forcing string to use regex.
+                    str(grant)  # Forcing string to use regex.
                 )
                 if dba_search and entry['user'] not in known_admins:
                     grant_index_num = entry['grants'].index(grant)
