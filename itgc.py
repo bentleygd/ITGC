@@ -81,7 +81,7 @@ def main():
         # Parsing the results of the audit.
         results_read = open('audit_results.csv', 'r', newline='')
         r_reader = DictReader(results_read)
-        msg_body = '%d hosts were succsefully audited out of %d hosts\n\n' % (
+        msg_body = '%d hosts were successfully audited out of %d hosts\n\n' % (
             alive_int, total_int
         )
         for row in r_reader:

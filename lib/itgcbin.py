@@ -111,7 +111,7 @@ class ITGCAudit:
         # objects for compatibiltiy with other string (or string realted)
         # functions/methods.
         for data in raw_user_data:
-            acct_name = data['sAMAcountName'][0].decode().lower()
+            acct_name = data['sAMAccountName'][0].decode().lower()
             self.ad_users.append(acct_name)
         self.log.info(
             'Successfully retrieved active user information from %s',
@@ -1195,7 +1195,7 @@ class MySQLAudit(ITGCAudit):
             for grant in entry['grants']:
                 dba_search = search(
                     'GRANT ALL PRIVILEGES ON .+ WITH GRANT OPTION',
-                    grant
+                    str(grant)
                 )
                 if dba_search and entry['user'] not in known_admins:
                     grant_index_num = entry['grants'].index(grant)
