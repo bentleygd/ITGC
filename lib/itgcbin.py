@@ -9,8 +9,9 @@ from time import time
 from cx_Oracle import connect, Error
 from paramiko import SSHClient, WarningPolicy
 from paramiko.ssh_exception import SSHException, AuthenticationException
-from ldap3 import Connection, Server, SUBTREE, Tls
+from ldap3 import Connection, Server, SUBTREE, BASE, Tls
 from ldap3.core.exceptions import LDAPExceptionError
+from mysql import connector
 
 from lib.validate import validate_un, validate_hn
 from lib.coreutils import ssh_test, get_credentials
@@ -24,13 +25,13 @@ class ITGCAudit:
         None.
 
         Instance variables:
-        host_list - list(), The list of hosts that is audited by the
+        host_list - dict(), The list of hosts that is audited by the
         object.
         ad_users - list(), Users in AD.
 
         Methods:
-        get_ad_users - Connects to ossec server, returns a list of AD
-        users.
+        get_ad_users - Connects to AD via LDAPS, returns a list of
+        users in AD.
         get_audit_ex - Compares local users to AD, returns users not
         in AD."""
         self.host_list = {}
@@ -110,7 +111,8 @@ class ITGCAudit:
         # objects for compatibiltiy with other string (or string realted)
         # functions/methods.
         for data in raw_user_data:
-            user_list.append(data['sAMAcountName'][0].decode().lower())
+            acct_name = data['sAMAccountName'][0].decode().lower()
+            self.ad_users.append(acct_name)
         self.log.info(
             'Successfully retrieved active user information from %s',
             config['ldap']['url']
@@ -121,8 +123,7 @@ class ITGCAudit:
         _elapsed = end - start
         elapsed = int(round(_elapsed, 0))
         self.log.debug('Retrieved active users in %d seconds', elapsed)
-        for user in user_list:
-            self.ad_users.append(user)
+        user_list = self.ad_users
         return user_list
 
     def get_audit_ex(self, local_users, ad_users, exclusions):
@@ -177,14 +178,20 @@ class OracleDBAudit(ITGCAudit):
         """Parses a tnsnames.ora file, returns DB host info.
 
         Keyword Arguments:
-        tns_file - str(), The location of the tnsnames.ora file.
+        _file - str(), The location of the tnsnames.ora file.
         db_pwd - str(), The password to log in to the DB.
         env - str(), The environment to audit (i.e., production or
         non-production).
 
         Outputs:
         host_lost - Dict(), a dictionary containing reachable and
-        unreachable DBs."""
+        unreachable DBs.
+
+        Raises:
+        Error - The base class for exceptions for the cx_oracle module.
+        This occurs when something goes wrong connecting to the the DB.
+        The base class is used in order to be able to catch any
+        sub exception, the details of which would be logged."""
         # Variable initialization.
         db_names = []
         self.host_list = {'active_dbs': [], 'dead_dbs': []}
@@ -226,12 +233,14 @@ class OracleDBAudit(ITGCAudit):
         db_host - str(), The DB SID.
 
         Outputs:
-        db_user_list - list(), A list of database user dictionaries
+        db_users- list(), A list of database user dictionaries
         containg the username and the profile of the user.
 
         Raises:
-        con_error - Unable to connect to the database.  Prints error
-        message and exits with a status code of 1."""
+        Error - The base class for exceptions for the cx_oracle module.
+        This occurs when something goes wrong connecting to the the DB.
+        The base class is used in order to be able to catch any
+        sub exception, the details of which would be logged."""
         db_users = []
         try:
             # Connecting to DB
@@ -264,17 +273,18 @@ class OracleDBAudit(ITGCAudit):
         """Connects to the database, returns a list of users.
 
         Keyword Arguments:
-        user - str(), The database user to connect as.
         pwd - str(), The user's password.
         db_host - str(), The connection string of the database.
 
         Outputs:
-        db_user_list - list(), A list of database user dictionaries
+        db_granted_roles - list(), A list of database user dictionaries
         containg the granted role(s) of the user.
 
         Raises:
-        con_error - Unable to connect to the database.  Prints error
-        message and exits with a status code of 1."""
+        Error - The base class for exceptions for the cx_oracle module.
+        This occurs when something goes wrong connecting to the the DB.
+        The base class is used in order to be able to catch any
+        sub exception, the details of which would be logged."""
         db_granted_roles = []
         # Connecting to DB
         try:
@@ -490,8 +500,6 @@ class UnixHostAudit(ITGCAudit):
         server.
 
         Keyword arguments:
-        user - str(), The user that will be connecting to the remote
-        system.
         ossec_server - str(), The ossec server to connect to.
 
         Outputs:
@@ -600,7 +608,7 @@ class UnixHostAudit(ITGCAudit):
         return admin_ex
 
     def get_pwd_exp_exceptions(self, host, local_users, ad_users):
-        """Audits user account password change time.
+        """Audits Unix user account password change time.
 
         Keyword arugments:
         host - str(), hostname to connect to.
@@ -617,11 +625,15 @@ class UnixHostAudit(ITGCAudit):
         there is a problem with provided credentials.
         SSHException - An underlying problem making the SSH connection
         that is not a timeout error or authentication.
-        timeout - When the SSH connect fails due to a timeout."""
+        timeout - When the SSH connect fails due to a timeout.
+        ValueError - Occurs when input validation fails."""
         # Iterating through each account and appending it it to a list
         # if the account is not in active directory.  Accounts in AD
         # should have their password expiration/rotation in AD.
         audit_exceptions = []
+        config = ConfigParser()
+        config.read(self.conf)
+        pwd_rotate_days = int(config['linux']['pwd_rotate'])
         current_time = round(time())
         accounts_to_audit = []
         for local_user in local_users:
@@ -633,6 +645,9 @@ class UnixHostAudit(ITGCAudit):
         # Obtaining the last password change timestamp for each account
         # from the remote host.
         for account in accounts_to_audit:
+            # Need to change this to get the account name and
+            # associated password change time for all accounts in one
+            # connection instead of each account individually.
             if not validate_un(account):
                 raise ValueError
             try:
@@ -656,16 +671,20 @@ class UnixHostAudit(ITGCAudit):
                 return 'Connection timed out after 5 seconds.'
             except ValueError:
                 self.log.exception('Input validation failed for %s', account)
+            # Converting password change time from /etc/shadow to epoch.
             pwd_ctime = out * 60 * 60 * 24
+            # Closing SSH connection.
+            client.close()
+            # Checking to see if password change time from /etc/shadow
+            # is greater than 365 days.
             pwd_rotation_time = pwd_ctime - current_time
             pwd_rotation_days = pwd_rotation_time / 24 / 60 / 60
-            if pwd_rotation_days > 365:
+            if pwd_rotation_days > pwd_rotate_days:
                 audit_exceptions.append(account)
-            client.close()
         return audit_exceptions
 
 
-class LDAPAudit(ITGCAudit):
+class LDAPAudit():
     def __init__(self):
         """Creates a LDAPAudit object.
 
@@ -674,17 +693,23 @@ class LDAPAudit(ITGCAudit):
         password expiration.
         svc_acct_pwd_exp - A list of service accounts that have aged
         passwords.
+        bad_domain_admins - A list of accounts that are not part of a
+        vetted list of domain admins.
 
         Methods:
         get_no_pwd_exp - Audits LDAP and retrieves a list of users that
         have passwords that never expire.
         get_bad_svc_acct_pwd - Audits LDAP and retrieves a list of
         service accounts that have not changed their password within
-        the timeframe determined by policy."""
-        # Inheriting parent class instances variables and methods.
-        ITGCAudit.__init__(self)
+        the timeframe determined by policy.
+        audit_domain_admins - Audits the membership of the domain admin
+        group and reports any account that is not expected to have
+        domain admin privileges."""
         self.no_pwd_exp = []
         self.svc_acct_pwd_exp = []
+        self.bad_domain_admins = []
+        self.log = getLogger(__name__)
+        self.conf = 'config.cnf'
 
     def get_no_pwd_exp(self):
         """Retrieves users with no password expiration.
@@ -699,8 +724,6 @@ class LDAPAudit(ITGCAudit):
         Raises:
         OSError - Occurs when the script is unable to locate or open the
         configuration file.
-        KeyError - Occurs when a given key in the data_map dictionary does
-        not exist.
         LDAPExceptionError - Occurs when the LDAP3 functions generate an
         error.  The base class for all LDAPExcetionErrors is used so that
         the log.exception call will catch the detailed exception while not
@@ -757,8 +780,8 @@ class LDAPAudit(ITGCAudit):
         # Checking to see if each user account has their password set
         # to never expire based on the value of the userAccountControl
         # attribute in AD.  If the user has their password set to never
-        # expire, append their SAM account name and last password
-        # change date to a list.
+        # expire, append a dictionary containing their SAM account
+        # name and last password change date to a list.
         for data in raw_user_data:
             acct_name = data['sAMAccountName'][0].decode().lower()
             uac = data['userAccountControl'][0]
@@ -781,3 +804,404 @@ class LDAPAudit(ITGCAudit):
             'Peformed password expiration audit in %d seconds', elapsed
         )
         return self.no_pwd_exp
+
+    def get_bad_svc_acct_pwd(self):
+        """Produces a list of service accounts that have not had a
+        password change in 365 days.
+
+        Keyword Arguments:
+        None
+
+        Returns:
+        self.svc_acct_pwd_exp - A list of service accounts that have
+        aged passwords.
+
+        Raises:
+        OSError - Occurs when the script is unable to locate or open the
+        configuration file.
+        LDAPExceptionError - Occurs when the LDAP3 functions generate an
+        error.  The base class for all LDAPExcetionErrors is used so that
+        the log.exception call will catch the detailed exception while not
+        missing any potential exceptions."""
+        # Retrieving information from the configuration file.
+        config = ConfigParser()
+        try:
+            config.read(self.conf)
+        except OSError:
+            self.log.exception('Unable to open configuration file.')
+            exit(1)
+        ldap_url = config['ldap']['url']
+        ldap_bind_dn = config['ldap']['bind_dn']
+        search_ou = config['ldap']['svc_ou'].split('|')
+        # Getting credentials from SCSS.
+        ldap_bind_secret = get_credentials({
+            'api_key': config['ldap']['scss_api'],
+            'otp': config['ldap']['scss_otp'],
+            'userid': config['ldap']['scss_user'],
+            'url': config['ldap']['scss_url']
+        })
+        # Getting password expiration time (in days).  Change this
+        # value in the configuration as approrpiate for your
+        # organization.
+        passwd_exp_days = int(config['ldap']['passwd_exp'])
+        # Connecting to LDAP.
+        tls_config = Tls(validate=CERT_NONE, version=PROTOCOL_TLSv1_2)
+        server = Server(ldap_url, use_ssl=True, tls=tls_config)
+        try:
+            conn = Connection(
+                server,
+                user=ldap_bind_dn,
+                password=ldap_bind_secret,
+                auto_bind=True
+            )
+        except LDAPExceptionError:
+            self.log.exception('Error occurred connecting to LDAP server.')
+        self.log.debug('Successfully connected to LDAP server: %s', ldap_url)
+        raw_user_data = []
+        # Searching LDAP for service accounts that are in the OUs
+        # (and all sub-OUs) specified in config['ldap']['svc_ou'].
+        ldap_filter = ('(&(objectClass=user)(objectCategory=CN=Person,' +
+                       'CN=Schema,CN=Configuration,DC=24hourfit,DC=com))')
+        for ou in search_ou:
+            user_data = conn.extend.standard.paged_search(
+                ou,
+                ldap_filter,
+                search_scope=SUBTREE,
+                attributes=['sAMAccountName', 'passwordLastChange'],
+                paged_size=500,
+            )
+            for raw_data in user_data:
+                raw_user_data.append(raw_data['raw_attributes'])
+        current_time = round(time())
+        for data in raw_data:
+            # Coverting wintime to epoch.
+            wintime = int(data[0]['passwordLastChange'])
+            pwd_change = wintime / 10000000 - 11644473600
+            # Determining password age.
+            pwd_age = int(current_time - pwd_change) / 60 / 24 / 24
+            # Determing if a password hasn't been changed since the
+            # value specified in the configuration.
+            if pwd_age >= passwd_exp_days:
+                self.svc_acct_pwd_exp.append(
+                    data[0]['sAMAccountName'].decode()
+                )
+        return self.svc_acct_pwd_exp
+
+    def audit_domain_admins(self):
+        """Returns a list of unauthorized domain admins.
+
+        Keyword Arguments:
+        None
+
+        Returns:
+        self.bad_domain_admins - A list of user account names and
+        descriptionsthat are not authorized to have domain admin
+        privileges.
+
+        Raises:
+        OSError - Occurs when the script is unable to locate or open the
+        configuration file.
+        LDAPExceptionError - Occurs when the LDAP3 functions generate an
+        error.  The base class for all LDAPExcetionErrors is used so that
+        the log.exception call will catch the detailed exception while not
+        missing any potential exceptions."""
+        # Retrieving information from the configuration file.
+        config = ConfigParser()
+        try:
+            config.read(self.conf)
+        except OSError:
+            self.log.exception('Unable to open configuration file.')
+            exit(1)
+        ldap_url = config['ldap']['url']
+        ldap_bind_dn = config['ldap']['bind_dn']
+        adm_dn = config['ldap']['adm_dn']
+        # Creating list of approved admins.
+        approved_admins = []
+        _file = open(config['ldap']['domain_admins'], 'r')
+        for entry in _file:
+            approved_admins.append(entry.strip('\n'))
+        # Getting credentials from SCSS.
+        ldap_bind_secret = get_credentials({
+            'api_key': config['ldap']['scss_api'],
+            'otp': config['ldap']['scss_otp'],
+            'userid': config['ldap']['scss_user'],
+            'url': config['ldap']['scss_url']
+        })
+        # Creating variables to use later.
+        admin_list = []
+        admin_groups = []
+        # Connecting to LDAP.
+        tls_config = Tls(validate=CERT_NONE, version=PROTOCOL_TLSv1_2)
+        server = Server(ldap_url, use_ssl=True, tls=tls_config)
+        try:
+            conn = Connection(
+                server,
+                user=ldap_bind_dn,
+                password=ldap_bind_secret,
+                auto_bind=True
+            )
+        except LDAPExceptionError:
+            self.log.exception('Error occurred connecting to LDAP server.')
+        self.log.debug('Successfully connected to LDAP server: %s', ldap_url)
+        # Getting admins
+        builtin_admins = conn.extend.standard.paged_search(
+            adm_dn,
+            '(objectClass=group)',
+            search_scope=SUBTREE,
+            attributes=['member'],
+            paged_size=50,
+            generator=False
+        )
+        # Determining if the built-in admininstrator group member is a
+        # group or a user.  If it is a group, enumerating that groups
+        # members as well.
+        ldap_filter = '(|(objectClass=group)(objectClass=user))'
+        for builtin_admin in builtin_admins[0]['attributes']['member']:
+            search_base = builtin_admin
+            admin_data = conn.extend.standard.paged_search(
+                search_base,
+                ldap_filter,
+                BASE,
+                attributes=['sAMAccountName', 'distinguishedName',
+                            'objectClass', 'description'],
+                paged_size=100,
+                generator=False
+            )
+            # Checking to see if the group member is a group.
+            if 'group' in admin_data[0]['attributes']['objectClass']:
+                admin_groups.append(
+                    admin_data[0]['attributes']['distinguishedName']
+                )
+            # Checking to see if the group member is a user.
+            elif 'user' in admin_data[0]['attributes']['objectClass']:
+                admin_list.append({
+                    'name': admin_data[0]['attributes']['sAMAccountName'],
+                    'desc': admin_data[0]['attributes']['description'][0],
+                })
+        # Retrieving nested group information.  If the group member is
+        # a user, we append it to admin_list.  If the group member is
+        # a group, we append it to admin_groups.  This process is
+        # repeated until there are no more groups (we ahve a list of
+        # only users).
+        while len(admin_groups) > 0:
+            entry = admin_groups.pop(0)
+            admin_data = conn.extend.standard.paged_search(
+                entry,
+                ldap_filter,
+                BASE,
+                attributes=['sAMAccountName', 'distinguishedName',
+                            'objectClass', 'description', 'member'],
+                paged_size=100,
+                generator=False
+            )
+            # Checking to see if the member is a user.  If it is not
+            # already in the admin_list, append it to the admin_list.
+            if 'user' in admin_data[0]['attributes']['objectClass']:
+                admin_data = {
+                    'name': admin_data[0]['attributes']['sAMAccountName'],
+                    'desc': admin_data[0]['attributes']['description'][0]
+                }
+                if admin_data not in admin_list:
+                    admin_list.append(admin_data)
+            # Checking to see if the group member is a group.
+            elif 'group' in admin_data[0]['attributes']['objectClass']:
+                for member in admin_data[0]['attributes']['member']:
+                    admin_groups.append(member)
+        # Unbinding ldap object.
+        conn.unbind()
+        # Determining if admin is approved or not.
+        for admin in admin_list:
+            if admin['name'] not in approved_admins:
+                self.bad_domain_admins.append(admin)
+        return self.bad_domain_admins
+
+
+class MySQLAudit(ITGCAudit):
+    def __init__(self):
+        """Creates a MySQL audit object.
+
+        Keyword Arguments:
+        None.
+
+        Instances Variables:
+        db_user - The user account used to authenticate to the DB.
+
+        Methods:
+        get_mysql_dbs - Connects to remote server and retrieves a list
+        of MYSQL dbs running on that host.
+        get_mysql_users - Connects to remote server and retrieves a
+        list of all users from the mysql.user table."""
+        # Calling parent class and setting instance variables.
+        ITGCAudit.__init__(self)
+        self.db_user = str()
+
+    def get_mysql_dbs(self, host, db_pwd):
+        """Connects to a host and retrieves list of DBs on that host.
+
+        Keyword Arguments:
+        db_pwd - Str().  The password for self.db_user.
+        host - Str().  The remote MySQL server to connect to.
+
+        Returns:
+        mysql_dbs - List().  A list of the mysql dbs on the specified
+        host.
+
+        Exceptions:
+        mysql.connector.Error - mysql module error class called when
+        there is an error.  Specific details about the exception will
+        be logged."""
+        # Creating list variable to store query results.
+        mysql_dbs = []
+        # Connecting to remote host and creating a cursor.  If the
+        # connection is unsuccessful, log it.
+        try:
+            mysql_con = connector.connect(
+                user=self.db_user,
+                password=db_pwd,
+                host=host,
+            )
+        except connector.Error:
+            self.log.exception('MySQL module error.')
+        mysql_cursor = mysql_con.cursor()
+        # Executing SQL with no user supplied input so input validation
+        # isn't required.
+        query_sql = ('SHOW DATABASES')
+        mysql_cursor.execute(query_sql)
+        # Iterating over the results and storing the result in a list.
+        for mysql_db in mysql_cursor:
+            mysql_dbs.append(mysql_db)
+        # Closing connections for tidiness.
+        mysql_cursor.close()
+        mysql_con.close()
+        return mysql_dbs
+
+    def get_mysql_users(self, host, db_pwd):
+        """Connects to MySQL DB and retrieves a list of DB users.
+
+        Keyword Arguments:
+        host - str().  The remote host to connect to.
+        db_pwd - str().  The password of self.db_user.
+
+        Returns:
+        db_users - list().  A list of users from the mysql.user table.
+
+        Exceptions:
+        mysql.connector.Error - mysql module error class called when
+        there is an error.  Specific details about the exception will
+        be logged."""
+        # Instantiating results list.
+        db_users = []
+        # Connect to the MySQL DB.
+        try:
+            mysql_con = connector.connect(
+                user=self.db_user,
+                password=db_pwd,
+                host=host,
+            )
+        # If the connection is unsuccessful, log it and quit.
+        except connector.Error:
+            self.log.exception('MySQL module error.')
+            exit(1)
+        # Instantiating a cursor.
+        mysql_cursor = mysql_con.cursor(buffered=True)
+        # Executing query to obtain distinct users from mysql.user
+        user_query = 'SELECT DISTINCT user FROM mysql.user'
+        mysql_cursor.execute(user_query)
+        # Iterating through the users, appending them to the list.
+        for line in mysql_cursor:
+            db_users.append(line[0])
+        # Closing connections because you put things up when you're
+        # done with them.
+        mysql_cursor.close()
+        mysql_con.close()
+        return db_users
+
+    def get_mysql_grants(self, host, user_list, db_pwd):
+        """Connects to MySQL DB and gets grants for each user.
+
+        Keyword Arugments:
+        host - str().  The MySQL host to connect to.
+        user_list - list().  A list of users from the mysql.user table.
+        db_pwd - str().  The password for self.db_user.
+
+        Outputs:
+        mysql_grants - list().  A list of dict() objects that contain
+        the mysql_grants for each user.
+
+        Exceptions:
+        mysql.connector.Error - mysql module error class called when
+        there is an error.  Specific details about the exception will
+        be logged.
+        mysql.connection.errors.ProgrammingError - Occurs when a user
+        has no grants.  We pass over the exception as it is benign."""
+        # Initializing return value.
+        mysql_grants = []
+        # Connecting to DB.
+        try:
+            mysql_con = connector.connect(
+                user=self.db_user,
+                password=db_pwd,
+                host=host,
+            )
+        # If something bad happens, exit and log it for reivew.
+        except connector.Error:
+            self.log.exception('MySQL module error.')
+            exit(1)
+        mysql_cursor = mysql_con.cursor(buffered=True)
+        # Iterating over each user, retrieving their grants.
+        for user in user_list:
+            # Initializing list to store grants.
+            user_grants = []
+            # Executing query to obtain grants.
+            try:
+                mysql_cursor.execute('SHOW GRANTS FOR %s' % (user))
+                # Iterating over each grant, storing them to a list.
+                for line in mysql_cursor:
+                    user_grants.append(line)
+                # Storing grant info in return value.
+                mysql_grants.append({
+                    'user': user,
+                    'grants': user_grants
+                })
+            except connector.errors.ProgrammingError:
+                # This will catch any instance of a user or role that
+                # does not have any grants.
+                pass
+        # Closing connections to be tidy.
+        mysql_cursor.close()
+        mysql_con.close()
+        return mysql_grants
+
+    def get_mysql_allpriv_ex(self, grants_list, known_admins):
+        """Identifies which users have been granted "ALL PRIVILEGES"
+        in a MySQL DB that shouldn't have the grant.
+
+        Inputs:
+        grants_list - list().  A list of dictionaries containing two
+        keys: the user name and their corresponding grants.
+        known_admins - list().  A list of user accounts that are
+        authorized to have all_privs.
+
+        Returns:
+        all_priv_ex - A list of dictionaries containing the following
+        keys: user and grant."""
+        # Instantiating a list object to store exceptions.
+        allpriv_exceptions = []
+        # Iterating through grants.
+        for entry in grants_list:
+            # Looking for the string 'ALL PRIVILEGES' and checking to
+            # see if the user isn't a known DBA/authorized all priv
+            # grant user.
+            for grant in entry['grants']:
+                dba_search = search(
+                    'GRANT ALL PRIVILEGES ON .+ WITH GRANT OPTION',
+                    str(grant)  # Forcing string to use regex.
+                )
+                if dba_search and entry['user'] not in known_admins:
+                    grant_index_num = entry['grants'].index(grant)
+                    allpriv_exceptions.append({
+                        'user': entry['user'],
+                        'grant': entry['grants'][grant_index_num][0]
+                    })
+        # Return exceptions.
+        return allpriv_exceptions
