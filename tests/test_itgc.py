@@ -436,6 +436,102 @@ class TestOracleConfig:
         assert test is True
 
 
+class TestMySQLConfig:
+    """Class for MySQL config testing.
+
+    Keyword Arguments:
+    None
+
+    Outputs:
+    None
+
+    Methods:
+    test_config_exist - Tests to see if the config exists.
+    test_mysql_config - Test to see if config contains MySQL elements.
+    test_dba_members - Tests to see if the config contains a list of
+    known DBAs.
+    test_msyql_exclusions - Tests to see if the config contains a list
+    of MySQL service accounts to exclude from the audit."""
+
+    def test_config_exist(self):
+        """Returns true if config file exists.
+
+        Keyword Arguments:
+        None.
+
+        Outputs:
+        True or False.
+
+        Raises:
+        None."""
+        test = exists('example.conf')
+        assert test is True
+
+    def test_mysql_config(self):
+        """Returns true if MySQL configuration elements exist.
+
+        Keyword Arguments:
+        None.
+
+        Outputs:
+        True or False.
+
+        Raises:
+        None."""
+        config = ConfigParser()
+        config.read('example.conf')
+        if 'mysql' in config:
+            test = True
+        else:
+            test = False
+        assert test is True
+
+    def test_dba_members(self):
+        """Returns true if the configuration file contains an element
+        that contains known good DBAs.
+
+        Keyword Arguments:
+        None.
+
+        Outputs:
+        True or False.
+
+        Raises:
+        None."""
+        config = ConfigParser()
+        config.read('example.conf')
+        if 'known_admins' in config['mysql']:
+            # Change the number as appropriate.
+            dbas = config['oracle']['known_admins'].split(',')
+            if len(dbas) > 3:
+                test = True
+            else:
+                test = False
+        else:
+            test = False
+        assert test is True
+
+    def test_mysql_exclusions(self):
+        """Returns true if the configuration file contains the
+        exclusions element specific to MySQL DBs.
+
+        Keyword Arguments:
+        None.
+
+        Outputs:
+        True or False.
+
+        Raises:
+        None."""
+        config = ConfigParser()
+        config.read('example.conf')
+        if 'exclusions' in config['oracle']:
+            test = True
+        else:
+            test = False
+        assert test is True
+
+
 class TestITGCCode:
     """Class for ITGC code testing.
 
