@@ -1030,7 +1030,13 @@ class MySQLAudit(ITGCAudit):
         get_mysql_dbs - Connects to remote server and retrieves a list
         of MYSQL dbs running on that host.
         get_mysql_users - Connects to remote server and retrieves a
-        list of all users from the mysql.user table."""
+        list of all users from the mysql.user table.
+        get_mysql_grants - Connects to remote server and retrieves the
+        grants for each mysql user in the list passed to this method.
+        get_mysql_allpriv_ex - Identifies which users have been
+        granted "ALL PRIVILEGES" in a MySQL DB that shouldn't have
+        the grant.
+        """
         # Calling parent class and setting instance variables.
         ITGCAudit.__init__(self)
         self.db_user = str()
