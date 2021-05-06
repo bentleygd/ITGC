@@ -33,7 +33,7 @@ Audit tests currently exist for: Active Directory (via LDAP), AIX, Linux and Ora
 See DOCS.md for more detailed documentation.
 
 # Features
-- Automated security audits for Linux, AIX and Oracle DBs.  
+- Automated security audits for Linux, AIX, MySQL DBs and Oracle DBs.  
 <h2>AIX/Linux</h2>
 <h3>AIX/Linux User Auditing</h3>
 Linux user accounts are compared to a list of accounts that are retrieved from Active Directory.  Any Linux account that has a valid login shell that does not have a corresponding active directory account is flagged as an audit finding.  A list of local accounts must be maintained for exceptions to the audit process (e.g., root).
@@ -55,6 +55,15 @@ Oracle DB users with the DBA granted role are compared to a list of users that a
 
 <h3>DB User Profile Auditing</h3>
 Any user that is considered an "air breather" that has SCHEMA_PROF is flagged as an audit finding.  Additionally, any account with the DEFAULT profile is flagged as an audit finding as users should receive a distinct DB profile.
+
+***
+
+<h2>MySQL DB</h2>
+<h3>MySQL DB User Auditing</h3>
+MySQL DB user accounts are compared to a list of accounts that are retrieved from Active Directory using ldap3.  Any DB account that does not have a corresponding active directory account is flagged as an audit finding.  A list of local DB accounts must be maintained for exceptions to the audit process.  The accounts should be listed in the configuration file as ['mysql']['exceptions']
+
+<h3>DBA Granted Role Auditing</h3>
+MySQL DB users with the all privileges grant with the grant option are compared to a list of users that are expected to have the elevated grant.  Any exceptions are noted as an audit finding.
 
 ***
 
