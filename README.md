@@ -1,7 +1,7 @@
 # ITGC
 Python scripts used for SOX ITGCs.  These scripts are designed to assist in automating user security reviews for Unix based systems and Oracle databases.  Other useful audits are included as well.
 
-[![Known Vulnerabilities](https://snyk.io/test/github/bentleygd/ITGC/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/bentleygd/ITGC?targetFile=requirements.txt)[![Total alerts](https://img.shields.io/lgtm/alerts/g/bentleygd/ITGC.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bentleygd/ITGC/alerts/)[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/bentleygd/ITGC.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/bentleygd/ITGC/context:python)![Lint and Test](https://github.com/bentleygd/ITGC/workflows/Lint%20and%20Test/badge.svg)
+[![Known Vulnerabilities](https://snyk.io/test/github/bentleygd/ITGC/badge.svg?targetFile=requirements.txt)](https://snyk.io/test/github/bentleygd/ITGC?targetFile=requirements.txt)![Lint and Test](https://github.com/bentleygd/ITGC/workflows/Lint%20and%20Test/badge.svg)
 
 # Purpose
 This project was started to automate user security reviews (and other audits) that may be taken as part of IT General Control testing for SOX compliance.  Additional audits may be performed that may be useful to ensure that security controls (taken out of a purely SOX context) are functioning as intended.  Automating these audits has the following benefits:  
@@ -18,16 +18,62 @@ This project was started to automate user security reviews (and other audits) th
 # Usage
 In order to run the user security review scripts, run:  
 `$ python3 itgc.py [OS]`  
-Audit tests currently exist for: Active Directory (via LDAP), AIX, Linux and Oracle DB.  
+Audit tests currently exist for: Active Directory (via LDAP), AIX, Linux, Oracle DB and MySQL DB.
 
-> usage: itgc.py [-h] os  
-> SOX ITGC User Security Reviews
+> usage: itgc.py [-h] os
+>
+> SOX security reviews
 >
 > positional arguments:
->  os          Linux, AIX or Oracle
+>  os          Linux, AIX, Oracle or MySQL
 >
->optional arguments:
+> options:
 >  -h, --help  show this help message and exit
+
+# Example Configuration
+```
+[main]
+ossec = example.domain.com
+
+[mail]
+sender = Test@example.com
+recipient = thing1@cith.com,thing2@cith.com
+server = mailer.example.com
+
+[linux]
+admin_groups = sudo,root,adm,blah
+exclusions = bob,tom,alice
+known_admins = linux_admins.list
+pwd_rotate = 365
+
+[aix]
+admin_groups = sudo,root,adm,blah
+exclusions = flynn,tron
+known_admins = aix_admins.list
+known_hosts = asdf
+
+[oracle]
+db_user = rinzler
+exclusions = flynn
+known_admins = tron,clu,zuse,quorra
+environment = test
+
+[ldap]
+url = ldap://host.example.com
+bind_dn = CN=some_account,DC=example,DC=com
+base_dn = DC=example,DC=com
+search_ou = OU=User Accounts,DC=example,DC=com
+domain_admins = domain_admins.list
+passwd_exp = 365
+svc_ou = OU=Service Accounts,DC=example,DC=com
+adm_dn = CN=Administrators,CN=Builtin,DC=example,DC=com
+
+[mysql]
+db_user = tron
+exclusions = flynn,
+hosts = test.example.com,
+known_admins = clu,quora,flynn,rinzler,tron
+```
 
 # Documentation
 See DOCS.md for more detailed documentation.

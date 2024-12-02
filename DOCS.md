@@ -597,3 +597,118 @@ Code Example:
             expired_svc_accounts
         )
 ```
+# LDAPAudit Class Documentation
+
+The `LDAPAudit` class provides functionalities for auditing LDAP configurations, such as checking password expiration policies, identifying service accounts with aged passwords, and auditing domain administrator membership.
+
+## Class: `LDAPAudit`
+
+### Overview
+
+The `LDAPAudit` class is responsible for auditing LDAP directory configurations. It includes the following primary functions:
+
+1. **Password Expiration Audit**: Identifies user accounts with passwords that never expire.
+2. **Service Account Password Expiration**: Identifies service accounts that have not had their passwords changed within a specified time frame.
+3. **Domain Admins Audit**: Identifies accounts that should not have domain admin privileges.
+
+### Instance Variables
+
+- `no_pwd_exp`: A list that stores user accounts with passwords that never expire.
+- `svc_acct_pwd_exp`: A list that stores service accounts with passwords that have not been changed within the defined policy period.
+- `bad_domain_admins`: A list that stores user accounts found to be unauthorized domain admins.
+- `log`: Logger instance for logging events.
+- `conf`: Configuration file name (`config.cnf`).
+
+---
+
+## Methods
+
+### `__init__(self)`
+
+Initializes an instance of the `LDAPAudit` class.
+
+#### Instance Variables:
+- `no_pwd_exp`: Empty list for storing users with non-expiring passwords.
+- `svc_acct_pwd_exp`: Empty list for storing service accounts with aged passwords.
+- `bad_domain_admins`: Empty list for storing unauthorized domain admins.
+- `log`: Logger for error handling and information logging.
+- `conf`: Configuration file path (default: `'config.cnf'`).
+
+---
+
+### `get_no_pwd_exp(self)`
+
+Retrieves a list of users whose passwords are set to never expire in the LDAP directory.
+
+#### Returns:
+- `self.no_pwd_exp`: A list of dictionaries containing user accounts that have passwords set to never expire. Each dictionary contains:
+  - `'name'`: The SAM account name of the user.
+  - `'last_pwd_change'`: The last password change timestamp.
+
+#### Raises:
+- `OSError`: Raised if the configuration file cannot be opened.
+- `LDAPExceptionError`: Raised if an LDAP operation fails during the audit process.
+
+#### Description:
+- Reads configuration to connect to the LDAP server.
+- Searches LDAP for user accounts with passwords set to never expire based on the `userAccountControl` attribute.
+- Appends the user details to the `no_pwd_exp` list if the password is set to never expire.
+  
+---
+
+### `get_bad_svc_acct_pwd(self)`
+
+Retrieves a list of service accounts that have not changed their passwords within the defined period.
+
+#### Returns:
+- `self.svc_acct_pwd_exp`: A list of service accounts that have not changed their password within the configured expiration time.
+
+#### Raises:
+- `OSError`: Raised if the configuration file cannot be opened.
+- `LDAPExceptionError`: Raised if an LDAP operation fails during the audit process.
+
+#### Description:
+- Reads configuration to connect to the LDAP server.
+- Searches for service accounts in the specified organizational units.
+- Determines the password age based on the `passwordLastChange` attribute.
+- Compares the password age against the configured expiration period and adds accounts to `svc_acct_pwd_exp` if they have not changed their password within the set time.
+
+---
+
+### `audit_domain_admins(self)`
+
+Audits the membership of the domain admin group and returns a list of unauthorized domain admins.
+
+#### Returns:
+- `self.bad_domain_admins`: A list of unauthorized domain admin accounts. Each item is a dictionary containing:
+  - `'name'`: The SAM account name of the unauthorized admin.
+  - `'desc'`: The description of the unauthorized admin.
+
+#### Raises:
+- `OSError`: Raised if the configuration file cannot be opened.
+- `LDAPExceptionError`: Raised if an LDAP operation fails during the audit process.
+
+#### Description:
+- Reads configuration to connect to the LDAP server and retrieve the domain admin list.
+- Verifies if each member of the domain admin group is authorized by comparing with a pre-defined list of approved domain admins.
+- Adds any unauthorized domain admins to the `bad_domain_admins` list.
+
+---
+## Example Usage
+
+```python
+# Create an LDAPAudit object
+audit = LDAPAudit()
+
+# Retrieve users with passwords that never expire
+no_pwd_exp_users = audit.get_no_pwd_exp()
+print(no_pwd_exp_users)
+
+# Retrieve service accounts with aged passwords
+svc_acct_pwd_exp = audit.get_bad_svc_acct_pwd()
+print(svc_acct_pwd_exp)
+
+# Audit domain admin group membership
+bad_domain_admins = audit.audit_domain_admins()
+print(bad_domain_admins)
+```
