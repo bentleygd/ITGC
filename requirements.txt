@@ -3,7 +3,7 @@ chardet==3.0.4
 cx-Oracle==7.3.0
 idna==3.7
 requests==2.32.0
-urllib3==1.26.5
+urllib3==1.26.18
 pyotp==2.3.0
 bcrypt==3.2
 cryptography==43.0.1
