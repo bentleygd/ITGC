@@ -1,4 +1,14 @@
-#!/usr/bin/python3
+"""
+This module automates auditing Linux, AIX, Oracle, MySQL and Active
+Directory (via LDAP) for SOX ITGCs.
+
+Classes:
+ITGCAudit - ITGC auditing parent class for all other ITGC auditing classes.
+OracleDBAudit - Oracle DB auditing class.
+UnixHostAudit - Unix OS auditing class.
+LDAPAudit - Active Directory via LDAP auditing class.
+MySQLAudit - MySQL DB auditing class.
+"""
 from re import match, search
 from socket import timeout
 from logging import getLogger
@@ -7,7 +17,7 @@ from configparser import ConfigParser
 from time import time
 
 from cx_Oracle import connect, Error
-from paramiko import SSHClient, WarningPolicy
+from paramiko import SSHClient
 from paramiko.ssh_exception import SSHException, AuthenticationException
 from ldap3 import Connection, Server, SUBTREE, BASE, Tls
 from ldap3.core.exceptions import LDAPExceptionError
@@ -411,7 +421,6 @@ class UnixHostAudit(ITGCAudit):
         # Connect to remote system, get a list of all user accounts that
         # have an interactive shell.
         client = SSHClient()
-        client.set_missing_host_key_policy(WarningPolicy)
         client.load_system_host_keys()
         try:
             client.connect(host, timeout=5)
@@ -459,7 +468,6 @@ class UnixHostAudit(ITGCAudit):
         # Obtaining members of monitored groups from a remote host.
         host_groups = []
         client = SSHClient()
-        client.set_missing_host_key_policy(WarningPolicy)
         client.load_system_host_keys()
         try:
             client.connect(host, timeout=5)
@@ -640,7 +648,6 @@ class UnixHostAudit(ITGCAudit):
             if local_user not in ad_users:
                 accounts_to_audit.append(local_user)
         client = SSHClient()
-        client.set_missing_host_key_policy(WarningPolicy)
         client.load_system_host_keys()
         # Obtaining the last password change timestamp for each account
         # from the remote host.

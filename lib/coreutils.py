@@ -1,12 +1,11 @@
 #!/usr/bin/python3
-from socket import gethostbyname, gaierror
+from socket import gethostbyname, gaierror, timeout
 from smtplib import SMTP, SMTPConnectError
 from email.mime.text import MIMEText
-from socket import timeout
 from logging import getLogger
 
-from requests import post
-from paramiko import SSHClient, WarningPolicy
+from requests import post, Timeout
+from paramiko import SSHClient
 from paramiko.ssh_exception import (
     NoValidConnectionsError, BadHostKeyException, AuthenticationException,
     SSHException
@@ -75,7 +74,11 @@ def get_credentials(scss_dict):
     # Connecting to SCSS.  If SSL verification fails, change verify to
     # false.  This isn't recommended (as it defeats the purpose of
     # verification), but it will make the code work in an emergency.
-    scss_response = post(url, headers=headers)
+    try:
+        scss_response = post(url, headers=headers, timeout=5)
+    except Timeout:
+        log.exception('Connection to SCSS timed out after 5 seconds. Exiting')
+        exit(1)
     if scss_response.status_code == 200:
         data = scss_response.json().get('gpg_pass')
         log.debug('Credentials successfully retrieved from SCSS')
@@ -107,7 +110,6 @@ def ssh_test(host):
     log = getLogger(__name__)
     client = SSHClient()
     client.load_system_host_keys()
-    client.set_missing_host_key_policy(WarningPolicy)
     try:
         client.connect(host, timeout=5, auth_timeout=5)
         client.close()
