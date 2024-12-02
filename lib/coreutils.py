@@ -6,7 +6,7 @@ from socket import timeout
 from logging import getLogger
 
 from requests import post
-from paramiko import SSHClient, WarningPolicy
+from paramiko import SSHClient
 from paramiko.ssh_exception import (
     NoValidConnectionsError, BadHostKeyException, AuthenticationException,
     SSHException
@@ -107,7 +107,6 @@ def ssh_test(host):
     log = getLogger(__name__)
     client = SSHClient()
     client.load_system_host_keys()
-    client.set_missing_host_key_policy(WarningPolicy)
     try:
         client.connect(host, timeout=5, auth_timeout=5)
         client.close()
