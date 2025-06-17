@@ -13,4 +13,4 @@ pyasn1==0.4.8
 ldap3==2.7
 mysql-connector-python==9.1.0
 six==1.15.0
-protobuf==3.18.3
+protobuf==4.25.8
