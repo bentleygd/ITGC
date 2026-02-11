@@ -6,7 +6,7 @@ requests==2.32.0
 urllib3==1.26.19
 pyotp==2.3.0
 bcrypt==3.2
-cryptography==43.0.1
+cryptography==46.0.5
 PyNaCl==1.5
 paramiko==3.4.0
 pyasn1==0.4.8
